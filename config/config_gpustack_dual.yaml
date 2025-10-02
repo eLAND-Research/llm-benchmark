@@ -1,0 +1,54 @@
+version: 1
+metadata:
+  experiment_name: gpustack_dual_smoke
+  description: "Dual endpoint smoke benchmark: external + internal gpustack"
+  seed: 77
+servers:
+  - name: gpustack_chat_ext
+    type: openai_compatible
+    base_url: http://gpustack.elandsoft.com/v1
+    api_key: env:GPUSTACK_EXT_API_KEY
+    model: gpt-oss-20b
+    timeout_seconds: 90
+    max_retries: 3
+    extra: {}
+  - name: gpustack_chat_int
+    type: openai_compatible
+    base_url: http://172.18.2.100/v1
+    api_key: env:GPUSTACK_INT_API_KEY
+    model: gpt-oss-20b
+    timeout_seconds: 90
+    max_retries: 3
+    extra: {}
+scenarios:
+  - name: dual_short_chat
+    type: chat_short
+    prompts_file: data/prompts/gpustack_short.jsonl
+    runs: 18                # total requests per server (prompts will cycle)
+    concurrency: [1, 3]     # light concurrency for both endpoints
+    request:
+      max_output_tokens: 512
+      temperature: 0.9
+      stream: false
+quality:
+  perplexity:
+    enabled: false
+  qa_accuracy:
+    enabled: false
+metrics: {}
+report:
+  formats: [markdown, json]
+  output_dir: results/gpustack_dual_smoke
+storage:
+  backend: json
+  path: results/gpustack_dual_smoke/raw
+warmup:
+  requests: 2
+retry_policy:
+  strategy: exponential_backoff
+  base_delay_ms: 300
+  max_attempts: 3
+cost_model:
+  enabled: false
+remote_metrics: []
+

@@ -1,0 +1,97 @@
+Metadata-Version: 2.4
+Name: llmbench
+Version: 0.1.0
+Summary: LLM Inference Server Benchmark Toolkit
+Author-email: "(Your Name)" <you@example.com>
+License: Apache-2.0
+Keywords: LLM,benchmark,inference,GPU,latency
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: Apache Software License
+Classifier: Intended Audience :: Developers
+Classifier: Topic :: Scientific/Engineering :: Artificial Intelligence
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: httpx>=0.27.0
+Requires-Dist: pydantic>=2.7.0
+Requires-Dist: typer>=0.12.3
+Requires-Dist: orjson>=3.9.15
+Requires-Dist: numpy>=1.26.0
+Requires-Dist: tiktoken>=0.7.0
+Requires-Dist: transformers>=4.41.0
+Requires-Dist: rich>=13.7.0
+Requires-Dist: pyyaml>=6.0
+Provides-Extra: dev
+Requires-Dist: pytest>=8.2.0; extra == "dev"
+Requires-Dist: pytest-asyncio>=0.23.0; extra == "dev"
+Requires-Dist: mypy>=1.10.0; extra == "dev"
+Requires-Dist: ruff>=0.5.0; extra == "dev"
+Requires-Dist: respx>=0.20.0; extra == "dev"
+
+# LLM Inference Server Benchmark (Client-Side Black-Box)
+
+Early skeleton (v0.1.0 draft) implementing a minimal runnable mock benchmark.
+
+## Features (current skeleton)
+- YAML config parsing (Pydantic schema)
+- Scenario: chat_short (generic chat scenario loader)
+- Adapters: OpenAI-compatible (basic) + Mock adapter
+- Async load generation with simple latency aggregation
+- Report generation (Markdown + JSON)
+- CLI commands: `validate-config`, `run`
+
+## Not Yet Implemented (planned)
+Refer to `blueprint.md` for full roadmap: network timings, streaming cadence metrics, remote metrics plugins, cost model, quality evaluation (perplexity / QA), advanced aggregation.
+
+## Quick Start (Mock)
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -e .[dev]
+llmbench validate-config config/config_mock.yaml
+llmbench run config/config_mock.yaml -o results/mock_run
+cat results/mock_run/report.md
+```
+
+## Config Fingerprint
+Fingerprint is a SHA256 of the canonical JSON dump of config → ensures reproducibility.
+
+## Running Tests
+```bash
+pytest -q
+```
+
+## OpenAI-Compatible Usage (Example Skeleton)
+```yaml
+servers:
+  - name: openai
+    type: openai_compatible
+    base_url: https://api.openai.com/v1
+    api_key: env:OPENAI_API_KEY
+    model: gpt-3.5-turbo
+```
+
+Export the API key before running:
+```bash
+export OPENAI_API_KEY=sk-...yourkey...
+```
+
+## Directory Layout (subset)
+```
+llmbench/
+  adapters/
+  config/
+  loadgen/
+  orchestrator/
+  report/
+  scenarios/
+  storage/
+  utils/
+config/config_mock.yaml
+```
+
+## License
+Apache-2.0 (planned). Placeholder.
+
+## Contributing
+Draft stage—PRs welcome after initial stabilization. See roadmap in `blueprint.md`.
+

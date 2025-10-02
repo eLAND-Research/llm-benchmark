@@ -1,0 +1,42 @@
+version: 1
+metadata:
+  experiment_name: mock_quick
+  description: "Quick mock benchmark run"
+  seed: 123
+servers:
+  - name: mock_server
+    type: mock
+    base_url: https://mock.local
+    model: mock-model
+scenarios:
+  - name: short_chat
+    type: chat_short
+    prompts_file: data/prompts/short.jsonl
+    runs: 6
+    concurrency: [1, 2]
+    request:
+      max_output_tokens: 32
+      temperature: 0.1
+      stream: false
+quality:
+  perplexity:
+    enabled: false
+  qa_accuracy:
+    enabled: false
+metrics: {}
+report:
+  formats: [markdown, json]
+  output_dir: results/mock_quick
+storage:
+  backend: json
+  path: results/mock_quick/raw
+warmup:
+  requests: 0
+retry_policy:
+  strategy: exponential_backoff
+  base_delay_ms: 100
+  max_attempts: 2
+cost_model:
+  enabled: false
+remote_metrics: []
+

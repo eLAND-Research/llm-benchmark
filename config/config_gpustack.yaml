@@ -1,0 +1,46 @@
+version: 1
+metadata:
+  experiment_name: gpustack_smoke
+  description: "Smoke and concurrency benchmark against gpustack chat endpoint"
+  seed: 42
+servers:
+  - name: gpustack_chat
+    type: openai_compatible
+    base_url: http://gpustack.elandsoft.com/v1   # adapter will append /chat/completions
+    api_key: env:GPUSTACK_API_KEY               # export GPUSTACK_API_KEY before running
+    model: gpt-oss-20b
+    timeout_seconds: 60
+    max_retries: 3
+    extra: {}
+scenarios:
+  - name: short_chat
+    type: chat_short
+    prompts_file: data/prompts/gpustack_short.jsonl
+    runs: 12               # total requests (will cycle prompts)
+    concurrency: [1, 2, 4] # quick scaling check
+    request:
+      max_output_tokens: 256
+      temperature: 1.0
+      stream: false
+quality:
+  perplexity:
+    enabled: false
+  qa_accuracy:
+    enabled: false
+metrics: {}
+report:
+  formats: [markdown, json]
+  output_dir: results/gpustack_smoke
+storage:
+  backend: json
+  path: results/gpustack_smoke/raw
+warmup:
+  requests: 2
+retry_policy:
+  strategy: exponential_backoff
+  base_delay_ms: 250
+  max_attempts: 3
+cost_model:
+  enabled: false
+remote_metrics: []
+

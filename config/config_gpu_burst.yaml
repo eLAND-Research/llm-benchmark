@@ -1,0 +1,44 @@
+version: 1
+metadata:
+  experiment_name: gpu_burst_mock
+  description: "High concurrency mock benchmark for throughput validation"
+  seed: 999
+servers:
+  - name: mock_server
+    type: mock
+    base_url: https://mock.local
+    model: mock-model
+    extra:
+      fail_first_n: 0
+scenarios:
+  - name: burst_short_chat
+    type: chat_short
+    prompts_file: data/prompts/short.jsonl
+    runs: 32            # replicated for each concurrency level
+    concurrency: [1, 2, 4, 8, 16, 32, 64]
+    request:
+      max_output_tokens: 64
+      temperature: 0.3
+      stream: false
+quality:
+  perplexity:
+    enabled: false
+  qa_accuracy:
+    enabled: false
+metrics: {}
+report:
+  formats: [markdown, json]
+  output_dir: results/gpu_burst
+storage:
+  backend: json
+  path: results/gpu_burst/raw
+warmup:
+  requests: 4
+retry_policy:
+  strategy: exponential_backoff
+  base_delay_ms: 100
+  max_attempts: 2
+cost_model:
+  enabled: false
+remote_metrics: []
+

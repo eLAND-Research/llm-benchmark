@@ -1,0 +1,61 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "llmbench"
+version = "0.1.0"
+description = "LLM Inference Server Benchmark Toolkit"
+authors = [
+  {name = "(Your Name)", email = "you@example.com"}
+]
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "Apache-2.0"}
+keywords = ["LLM", "benchmark", "inference", "GPU", "latency"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: Apache Software License",
+  "Intended Audience :: Developers",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence"
+]
+dependencies = [
+  "httpx>=0.27.0",
+  "pydantic>=2.7.0",
+  "typer>=0.12.3",
+  "orjson>=3.9.15",
+  "numpy>=1.26.0",
+  "tiktoken>=0.7.0",
+  "transformers>=4.41.0",
+  "rich>=13.7.0",
+  "pyyaml>=6.0"
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.2.0",
+  "pytest-asyncio>=0.23.0",
+  "mypy>=1.10.0",
+  "ruff>=0.5.0",
+  "respx>=0.20.0"
+]
+
+[project.scripts]
+llmbench = "llmbench.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["llmbench*"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = false
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]

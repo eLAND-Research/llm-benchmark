@@ -1,0 +1,6 @@
+{"role": "user", "content": "簡單介紹一下你是什麼模型？"}
+{"role": "user", "content": "列出三個適合學習 Python 初學者的練習題。"}
+{"role": "user", "content": "Explain the difference between CPU and GPU in one concise paragraph."}
+{"role": "user", "content": "用中文回答：給我兩個使用大型語言模型的實際商業應用案例。"}
+{"role": "user", "content": "Generate a short inspirational quote (≤15 words)."}
+
