@@ -1,10 +1,10 @@
 version: 1
 metadata:
-  experiment_name: gpustack_dual_smoke
-  description: "Dual endpoint smoke benchmark: external + internal gpustack"
+  experiment_name: Mac Studio M3 Ultra gpustack gpt-oss comparison
+  description: "Compare gpustack gpt-oss-20b vs gpt-oss-120b vs eland-goat-t1-gguf (reasoning_and_tools_70k_20250626_phi_r_14b) on short chat prompts"
   seed: 77
 servers:
-  - name: gpustack_chat_ext
+  - name: gpt-oss-20b-gguf
     type: openai_compatible
     base_url: http://gpustack.elandsoft.com/v1
     api_key: env:GPUSTACK_EXT_API_KEY
@@ -12,11 +12,19 @@ servers:
     timeout_seconds: 90
     max_retries: 3
     extra: {}
-  - name: gpustack_chat_int
+  - name: gpt-oss-120b-gguf
     type: openai_compatible
     base_url: http://172.18.2.100/v1
     api_key: env:GPUSTACK_INT_API_KEY
-    model: gpt-oss-20b
+    model: gpt-oss-120b
+    timeout_seconds: 90
+    max_retries: 3
+    extra: {}
+  - name: mlx-community/gpt-oss-120b-MXFP4-Q8
+    type: openai_compatible
+    base_url: http://172.18.2.100:8000/v1
+    api_key: env:GPUSTACK_INT_API_KEY
+    model: mlx-community/gpt-oss-120b-MXFP4-Q8
     timeout_seconds: 90
     max_retries: 3
     extra: {}

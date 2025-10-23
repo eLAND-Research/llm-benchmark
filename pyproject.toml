@@ -1,23 +1,27 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
 name = "llmbench"
 version = "0.1.0"
-description = "LLM Inference Server Benchmark Toolkit"
+description = "LLM Inference Server Benchmark Toolkit with Web UI"
 authors = [
-  {name = "(Your Name)", email = "you@example.com"}
+  {name = "LLMBench Contributors", email = "llmbench@example.com"}
 ]
 readme = "README.md"
 requires-python = ">=3.11"
 license = {text = "Apache-2.0"}
-keywords = ["LLM", "benchmark", "inference", "GPU", "latency"]
+keywords = ["LLM", "benchmark", "inference", "GPU", "latency", "fastapi", "web"]
 classifiers = [
   "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
   "License :: OSI Approved :: Apache Software License",
   "Intended Audience :: Developers",
-  "Topic :: Scientific/Engineering :: Artificial Intelligence"
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Framework :: FastAPI",
+  "Environment :: Web Environment"
 ]
 dependencies = [
   "httpx>=0.27.0",
@@ -28,7 +32,15 @@ dependencies = [
   "tiktoken>=0.7.0",
   "transformers>=4.41.0",
   "rich>=13.7.0",
-  "pyyaml>=6.0"
+  "pyyaml>=6.0",
+  "mlx-lm>=0.28.1",
+  "fastapi>=0.104.0",
+  "uvicorn[standard]>=0.24.0",
+  "jinja2>=3.1.0",
+  "sqlalchemy>=2.0.0",
+  "aiosqlite>=0.19.0",
+  "python-multipart>=0.0.6",
+  "greenlet>=3.0.0",
 ]
 
 [project.optional-dependencies]
@@ -43,9 +55,11 @@ dev = [
 [project.scripts]
 llmbench = "llmbench.cli:app"
 
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["llmbench*"]
+[project.urls]
+Homepage = "https://github.com/yourusername/llmbench"
+Documentation = "https://github.com/yourusername/llmbench/blob/main/README.md"
+Repository = "https://github.com/yourusername/llmbench"
+Issues = "https://github.com/yourusername/llmbench/issues"
 
 [tool.mypy]
 python_version = "3.11"

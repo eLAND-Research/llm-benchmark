@@ -45,6 +45,27 @@ def run(
     log.info("Done")
 
 
+@app.command()
+def serve(
+    host: str = typer.Option("0.0.0.0", help="Host to bind"),
+    port: int = typer.Option(8000, help="Port to bind"),
+    reload: bool = typer.Option(False, help="Enable auto-reload (development)"),
+):
+    """Start the LLMBench web server."""
+    import uvicorn
+
+    typer.echo(f"🚀 Starting LLMBench web server at http://{host}:{port}")
+    typer.echo(f"📊 Dashboard: http://{host}:{port}/")
+    typer.echo(f"📚 API Docs: http://{host}:{port}/docs")
+
+    uvicorn.run(
+        "llmbench.web.app:app",
+        host=host,
+        port=port,
+        reload=reload,
+    )
+
+
 if __name__ == "__main__":  # pragma: no cover
     app()
 

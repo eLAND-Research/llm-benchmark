@@ -20,12 +20,20 @@ Requires-Dist: tiktoken>=0.7.0
 Requires-Dist: transformers>=4.41.0
 Requires-Dist: rich>=13.7.0
 Requires-Dist: pyyaml>=6.0
+Requires-Dist: mlx-lm>=0.28.1
 Provides-Extra: dev
 Requires-Dist: pytest>=8.2.0; extra == "dev"
 Requires-Dist: pytest-asyncio>=0.23.0; extra == "dev"
 Requires-Dist: mypy>=1.10.0; extra == "dev"
 Requires-Dist: ruff>=0.5.0; extra == "dev"
 Requires-Dist: respx>=0.20.0; extra == "dev"
+Provides-Extra: web
+Requires-Dist: fastapi>=0.104.0; extra == "web"
+Requires-Dist: uvicorn[standard]>=0.24.0; extra == "web"
+Requires-Dist: jinja2>=3.1.0; extra == "web"
+Requires-Dist: sqlalchemy>=2.0.0; extra == "web"
+Requires-Dist: aiosqlite>=0.19.0; extra == "web"
+Requires-Dist: python-multipart>=0.0.6; extra == "web"
 
 # LLM Inference Server Benchmark (Client-Side Black-Box)
 

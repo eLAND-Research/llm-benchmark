@@ -29,4 +29,6 @@ llmbench/utils/__init__.py
 llmbench/utils/logging.py
 tests/test_benchmark_mock.py
 tests/test_cli.py
+tests/test_concurrency_and_streaming.py
 tests/test_config.py
+tests/test_throughput_csv.py

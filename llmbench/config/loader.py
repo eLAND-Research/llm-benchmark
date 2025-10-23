@@ -22,3 +22,9 @@ def load_config(path: str | Path) -> RootConfig:
 def load_config_from_dict(data: Dict[str, Any]) -> RootConfig:
     return RootConfig(**data)
 
+
+def load_config_from_string(yaml_string: str) -> RootConfig:
+    """Load config from YAML string."""
+    data = yaml.safe_load(yaml_string) or {}
+    return RootConfig(**data)
+

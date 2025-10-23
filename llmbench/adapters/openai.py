@@ -9,6 +9,7 @@ from typing import List, Dict, Any, AsyncIterator, Optional
 from .base import InferenceAdapter, ChatResult, StreamingChunk, EmbeddingResult
 import json
 import time
+import os
 
 
 class OpenAICompatibleAdapter(InferenceAdapter):
@@ -28,9 +29,17 @@ class OpenAICompatibleAdapter(InferenceAdapter):
         }
         start_ts = time.time()
         async with httpx.AsyncClient(timeout=gen_params.get("timeout", 60)) as client:
-            resp = await client.post(url, headers=self._headers(), json=payload)
+            try:
+                resp = await client.post(url, headers=self._headers(), json=payload)
+            except httpx.HTTPError as e:
+                raise
             headers_received_ts = time.time()
-        resp.raise_for_status()
+        if resp.status_code >= 400:
+            log_body = os.getenv("LLM_BENCH_LOG_ERROR_BODY", "1") != "0"
+            snippet = resp.text[:500] if log_body else "<suppressed>"
+            raise httpx.HTTPStatusError(
+                f"HTTP {resp.status_code} error body_snippet={snippet}", request=resp.request, response=resp
+            )
         data = resp.json()
         content = data.get("choices", [{}])[0].get("message", {}).get("content", "")
         usage = data.get("usage", {})
@@ -39,7 +48,6 @@ class OpenAICompatibleAdapter(InferenceAdapter):
             "request_start_ts": start_ts,
             "headers_received_ts": headers_received_ts,
             "wait_ms": wait_ms,
-            # placeholders for future detailed breakdown
             "dns_ms": None,
             "connect_ms": None,
             "tls_ms": None,
@@ -65,6 +73,13 @@ class OpenAICompatibleAdapter(InferenceAdapter):
         async with httpx.AsyncClient(timeout=gen_params.get("timeout", 60)) as client:
             async with client.stream("POST", url, headers=self._headers(), json=payload) as r:
                 headers_received_ts = time.time()
+                if r.status_code >= 400:
+                    body = await r.aread()
+                    log_body = os.getenv("LLM_BENCH_LOG_ERROR_BODY", "1") != "0"
+                    snippet = body.decode(errors="ignore")[:500] if log_body else "<suppressed>"
+                    raise httpx.HTTPStatusError(
+                        f"HTTP {r.status_code} error body_snippet={snippet}", request=r.request, response=r
+                    )
                 r.raise_for_status()
                 async for line in r.aiter_lines():
                     if not line:
@@ -72,7 +87,6 @@ class OpenAICompatibleAdapter(InferenceAdapter):
                     if line.startswith("data:"):
                         chunk = line[5:].strip()
                         if chunk == "[DONE]":
-                            # 結束 chunk：在最後輸出一個空 content 並附帶 timings
                             timings = {
                                 "request_start_ts": start_ts,
                                 "headers_received_ts": headers_received_ts,
@@ -94,7 +108,6 @@ class OpenAICompatibleAdapter(InferenceAdapter):
                             if first_content_ts is None:
                                 first_content_ts = time.time()
                             yield StreamingChunk(content=delta["content"], is_end=False)
-                # safety end (if [DONE] not seen)
                 if first_content_ts is None:
                     first_content_ts = time.time()
                 timings = {
