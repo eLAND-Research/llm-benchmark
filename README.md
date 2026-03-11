@@ -1,43 +1,43 @@
 # LLMBench
 
-Client-side black-box benchmarking toolkit for LLM inference servers. Measures latency, throughput, streaming cadence, and error patterns via HTTP/HTTPS — no server-side access required.
+用於 LLM 推論伺服器的客戶端黑箱效能測試工具。透過 HTTP/HTTPS 測量延遲、吞吐量、串流節奏與錯誤模式，無需存取伺服器端。
 
-Supports OpenAI-compatible APIs, vLLM, HuggingFace TGI, SGLang, and any endpoint that speaks the OpenAI chat completions protocol.
+支援 OpenAI 相容 API、vLLM、HuggingFace TGI、SGLang，以及任何實作 OpenAI chat completions 協定的端點。
 
-## Features
+## 功能
 
-- **Multi-server comparison** — benchmark multiple endpoints with identical prompts in a single run
-- **Concurrency sweeps** — test across configurable concurrency levels to find throughput saturation points
-- **Streaming metrics** — TTFB, inter-token intervals, first token gap, jitter (p95)
-- **Reproducibility** — config fingerprinting via SHA256 ensures identical test conditions
-- **Error analysis** — automatic categorization (timeout, rate limit, 5xx, connection, parse)
-- **Retry with backoff** — exponential backoff with jitter, configurable per run
-- **Web UI** — FastAPI dashboard for running benchmarks, viewing results, and exporting data
-- **Structured output** — Markdown reports, JSON summaries, CSV for further analysis
+- **多伺服器比較** — 單次執行中以相同 prompts 對多個端點進行基準測試
+- **並行度掃描** — 跨可設定的並行等級測試，找出吞吐量飽和點
+- **串流指標** — TTFB、token 間隔、首 token 延遲、抖動 (p95)
+- **可重現性** — 透過 SHA256 設定指紋確保測試條件一致
+- **錯誤分析** — 自動分類（逾時、速率限制、5xx、連線、解析）
+- **指數退避重試** — 含抖動的指數退避，可依執行設定
+- **Web UI** — FastAPI 儀表板，可執行測試、檢視結果、匯出資料
+- **結構化輸出** — Markdown 報告、JSON 摘要、CSV 供後續分析
 
-## Installation
+## 安裝
 
-Requires Python 3.11+.
+需要 Python 3.11+。
 
 ```bash
 pip install -e .
 
-# With dev dependencies
+# 含開發依賴
 pip install -e ".[dev]"
 ```
 
-## Usage
+## 使用方式
 
 ### CLI
 
 ```bash
-# Validate config
+# 驗證設定檔
 llmbench validate-config config/config_mock.yaml
 
-# Run benchmark
+# 執行基準測試
 llmbench run config/config_mock.yaml -o results/my_run
 
-# Start web server
+# 啟動 Web 伺服器
 llmbench serve --host 0.0.0.0 --port 8000
 ```
 
@@ -47,25 +47,25 @@ llmbench serve --host 0.0.0.0 --port 8000
 llmbench serve
 ```
 
-- Dashboard: http://localhost:8000/
-- API docs: http://localhost:8000/docs
+- 儀表板：http://localhost:8000/
+- API 文件：http://localhost:8000/docs
 
 ### REST API
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/benchmarks` | List benchmarks |
-| POST | `/api/benchmarks` | Create from YAML |
-| GET | `/api/benchmarks/{uuid}` | Benchmark details |
-| GET | `/api/benchmarks/{uuid}/status` | Poll status |
-| POST | `/api/benchmarks/{uuid}/run` | Trigger execution |
-| POST | `/api/benchmarks/{uuid}/cancel` | Cancel running |
-| DELETE | `/api/benchmarks/{uuid}` | Delete |
-| GET | `/api/benchmarks/{uuid}/export` | Export (json/csv/md) |
-| GET | `/api/stats` | Dashboard statistics |
-| POST | `/api/validate-config` | Validate YAML |
+| 方法 | 端點 | 說明 |
+|------|------|------|
+| GET | `/api/benchmarks` | 列出基準測試 |
+| POST | `/api/benchmarks` | 從 YAML 建立 |
+| GET | `/api/benchmarks/{uuid}` | 測試詳情 |
+| GET | `/api/benchmarks/{uuid}/status` | 輪詢狀態 |
+| POST | `/api/benchmarks/{uuid}/run` | 觸發執行 |
+| POST | `/api/benchmarks/{uuid}/cancel` | 取消執行 |
+| DELETE | `/api/benchmarks/{uuid}` | 刪除 |
+| GET | `/api/benchmarks/{uuid}/export` | 匯出 (json/csv/md) |
+| GET | `/api/stats` | 儀表板統計 |
+| POST | `/api/validate-config` | 驗證 YAML |
 
-## Configuration
+## 設定
 
 ```yaml
 version: 1
@@ -101,55 +101,55 @@ retry_policy:
   max_attempts: 3
 ```
 
-API keys can be injected via `env:VAR_NAME` syntax.
+API key 可透過 `env:VAR_NAME` 語法注入。
 
-## Metrics
+## 指標
 
-| Category | Metrics |
-|----------|---------|
-| Latency | p50, p90, p95, p99 (ms) |
-| Throughput | requests/sec, tokens/sec (input, output, total) |
-| Streaming | TTFB, first token gap, mean/p95 inter-token interval |
-| Reliability | error rate, retry rate, error category breakdown |
-| Concurrency | per-bucket statistics for each concurrency level |
+| 類別 | 指標 |
+|------|------|
+| 延遲 | p50, p90, p95, p99 (ms) |
+| 吞吐量 | requests/sec, tokens/sec (輸入, 輸出, 總計) |
+| 串流 | TTFB, 首 token 延遲, 平均/p95 token 間隔 |
+| 可靠性 | 錯誤率, 重試率, 錯誤類別分布 |
+| 並行度 | 各並行等級的獨立統計 |
 
-## Output
+## 輸出
 
-Each run produces:
+每次執行產生：
 
 ```
 results/<run_name>/
 ├── scenario-<name>/<server>/
-│   ├── requests.jsonl    # Raw per-request data
-│   └── summary.json      # Aggregated metrics
-├── global_summary.json   # Cross-scenario summary
-├── report.md             # Human-readable report
+│   ├── requests.jsonl    # 原始逐筆請求資料
+│   └── summary.json      # 彙總指標
+├── global_summary.json   # 跨場景摘要
+├── report.md             # 可讀報告
 └── concurrency_throughput.csv
 ```
 
-## Project Structure
+## 專案結構
 
 ```
 llmbench/
-├── adapters/       # Server adapters (OpenAI, Mock)
-├── config/         # YAML schema and loader
-├── loadgen/        # Async load generation
-├── orchestrator/   # Benchmark execution and aggregation
-├── report/         # Report generation
-├── scenarios/      # Test scenario definitions
-├── storage/        # SQLite backend
-├── utils/          # Logging utilities
-└── web/            # FastAPI web service
+├── adapters/       # 伺服器轉接器 (OpenAI, Mock)
+├── config/         # YAML schema 與載入器
+├── loadgen/        # 非同步負載產生
+├── orchestrator/   # 測試執行與彙總
+├── report/         # 報告產生
+├── scenarios/      # 測試場景定義
+├── storage/        # SQLite 後端
+├── utils/          # 日誌工具
+└── web/            # FastAPI Web 服務
 ```
 
-## Development
+## 開發
 
 ```bash
-pytest -v              # Run tests
+pytest -v              # 執行測試
 ruff check llmbench/   # Lint
-mypy llmbench/         # Type check
+mypy llmbench/         # 型別檢查
 ```
 
-## License
+## 授權
 
 Apache License 2.0
