@@ -56,10 +56,10 @@ dev = [
 llmbench = "llmbench.cli:app"
 
 [project.urls]
-Homepage = "https://github.com/yourusername/llmbench"
-Documentation = "https://github.com/yourusername/llmbench/blob/main/README.md"
-Repository = "https://github.com/yourusername/llmbench"
-Issues = "https://github.com/yourusername/llmbench/issues"
+Homepage = "https://github.com/eLAND-Research/llm-benchmark"
+Documentation = "https://github.com/eLAND-Research/llm-benchmark/blob/main/README.md"
+Repository = "https://github.com/eLAND-Research/llm-benchmark"
+Issues = "https://github.com/eLAND-Research/llm-benchmark/issues"
 
 [tool.mypy]
 python_version = "3.11"

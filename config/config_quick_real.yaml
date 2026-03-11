@@ -1,0 +1,57 @@
+version: 1
+metadata:
+  experiment_name: quick_real_test
+  description: "Quick real LLM benchmark - completes in under 1 minute"
+  seed: 42
+
+servers:
+  # Using L40s GPU server which should be faster
+  - name: L40s-gpt-oss-20b
+    type: openai_compatible
+    base_url: http://gpustack.elandsoft.com/v1
+    api_key: gpustack_e3da48eb55daaa22_6f1ffa49ae7b34ecbe71ca2435ad0cb0
+    model: gpt-oss-20b
+    timeout_seconds: 45        # Reduced timeout for speed
+    max_retries: 1
+    extra: {}
+
+scenarios:
+  # Very minimal test - 3 short requests
+  - name: quick_real
+    type: chat_short
+    prompts_file: data/prompts/gpustack_short.jsonl
+    runs: 3                    # 3 requests
+    concurrency: [1]           # Single concurrent request
+    request:
+      max_output_tokens: 50    # Short output for speed
+      temperature: 0.7
+      stream: false
+
+quality:
+  perplexity:
+    enabled: false
+  qa_accuracy:
+    enabled: false
+
+metrics: {}
+
+report:
+  formats: [markdown, json]
+  output_dir: results/quick_real_test
+
+storage:
+  backend: json
+  path: results/quick_real_test/raw
+
+warmup:
+  requests: 0                  # Skip warmup
+
+retry_policy:
+  strategy: exponential_backoff
+  base_delay_ms: 200
+  max_attempts: 1
+
+cost_model:
+  enabled: false
+
+remote_metrics: []

@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block title %}Benchmarks - LLMBench{% endblock %}
+
+{% block content %}
+<div class="px-4 sm:px-0">
+    <h2 class="text-2xl font-bold text-gray-900 mb-6">All Benchmarks ({{ total }})</h2>
+
+    <!-- Filters -->
+    <div class="bg-white shadow rounded-lg p-4 mb-6">
+        <form method="get" class="flex items-center space-x-4">
+            <select name="status" class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                <option value="">All Statuses</option>
+                <option value="pending" {% if current_status == 'pending' %}selected{% endif %}>Pending</option>
+                <option value="running" {% if current_status == 'running' %}selected{% endif %}>Running</option>
+                <option value="completed" {% if current_status == 'completed' %}selected{% endif %}>Completed</option>
+                <option value="failed" {% if current_status == 'failed' %}selected{% endif %}>Failed</option>
+            </select>
+            <button type="submit" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700">
+                Filter
+            </button>
+        </form>
+    </div>
+
+    <!-- Benchmarks Table -->
+    <div class="bg-white shadow rounded-lg overflow-hidden">
+        <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Runtime</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                </tr>
+            </thead>
+            <tbody class="bg-white divide-y divide-gray-200">
+                {% for benchmark in benchmarks %}
+                <tr>
+                    <td class="px-6 py-4">
+                        <div class="text-sm font-medium text-gray-900">{{ benchmark.name }}</div>
+                        {% if benchmark.description %}
+                        <div class="text-sm text-gray-500">{{ benchmark.description[:50] }}...</div>
+                        {% endif %}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full
+                            {% if benchmark.status == 'completed' %}bg-green-100 text-green-800
+                            {% elif benchmark.status == 'running' %}bg-blue-100 text-blue-800
+                            {% elif benchmark.status == 'failed' %}bg-red-100 text-red-800
+                            {% else %}bg-gray-100 text-gray-800{% endif %}">
+                            {{ benchmark.status }}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {% if benchmark.runtime_sec %}{{ "%.2f"|format(benchmark.runtime_sec) }}s{% else %}-{% endif %}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {{ benchmark.created_at.strftime('%Y-%m-%d %H:%M') }}
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                        <a href="/benchmarks/{{ benchmark.uuid }}" class="text-indigo-600 hover:text-indigo-900">View</a>
+                        <a href="/api/benchmarks/{{ benchmark.uuid }}/export?format=json" class="text-green-600 hover:text-green-900">Export</a>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="5" class="px-6 py-8 text-center text-sm text-gray-500">
+                        No benchmarks found.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

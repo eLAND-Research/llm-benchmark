@@ -1,0 +1,385 @@
+{% extends "base.html" %}
+
+{% block title %}{{ benchmark.name }} - LLMBench{% endblock %}
+
+{% block content %}
+<div class="px-4 sm:px-0">
+    <!-- Header -->
+    <div class="mb-6 flex justify-between items-start">
+        <div>
+            <h2 class="text-2xl font-bold text-gray-900">{{ benchmark.name }}</h2>
+            <p class="text-sm text-gray-500 mt-1">UUID: {{ benchmark.uuid }}</p>
+            {% if benchmark.description %}
+            <p class="text-gray-700 mt-2">{{ benchmark.description }}</p>
+            {% endif %}
+        </div>
+        <div class="flex space-x-2">
+            {% if benchmark.status in ['pending', 'running'] %}
+            <button id="cancel-btn" class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+                <svg class="-ml-0.5 mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+                Cancel
+            </button>
+            {% endif %}
+            <button id="rerun-btn" class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                <svg class="-ml-0.5 mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                </svg>
+                Rerun
+            </button>
+            <a href="/benchmarks/{{ benchmark.uuid }}/edit" class="inline-flex items-center px-3 py-2 border border-gray-300 text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                <svg class="-ml-0.5 mr-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                </svg>
+                Edit
+            </a>
+        </div>
+    </div>
+
+    <!-- Status & Metadata -->
+    <div class="bg-white shadow rounded-lg p-6 mb-6">
+        <dl class="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-3">
+            <div>
+                <dt class="text-sm font-medium text-gray-500">Status</dt>
+                <dd class="mt-1">
+                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full
+                        {% if benchmark.status == 'completed' %}bg-green-100 text-green-800
+                        {% elif benchmark.status == 'running' %}bg-blue-100 text-blue-800
+                        {% elif benchmark.status == 'failed' %}bg-red-100 text-red-800
+                        {% else %}bg-gray-100 text-gray-800{% endif %}">
+                        {{ benchmark.status }}
+                    </span>
+                </dd>
+            </div>
+            <div>
+                <dt class="text-sm font-medium text-gray-500">Runtime</dt>
+                <dd class="mt-1 text-sm text-gray-900">
+                    {% if benchmark.runtime_sec %}{{ "%.2f"|format(benchmark.runtime_sec) }}s{% else %}-{% endif %}
+                </dd>
+            </div>
+            <div>
+                <dt class="text-sm font-medium text-gray-500">Created</dt>
+                <dd class="mt-1 text-sm text-gray-900">{{ benchmark.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</dd>
+            </div>
+        </dl>
+    </div>
+
+    <!-- Execution Logs -->
+    <div class="bg-white shadow rounded-lg p-6 mb-6">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-lg font-medium text-gray-900">Execution Logs</h3>
+            <div class="flex items-center space-x-2">
+                <span id="log-status" class="text-sm text-gray-500"></span>
+                <button id="toggle-auto-refresh" class="inline-flex items-center px-3 py-1 border border-gray-300 text-xs font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+                    <svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                    </svg>
+                    Auto-refresh: <span id="auto-refresh-status">ON</span>
+                </button>
+            </div>
+        </div>
+        <div id="logs-container" class="bg-gray-50 rounded-md p-4 font-mono text-xs overflow-y-auto" style="max-height: 400px;">
+            <div id="logs-content" class="space-y-1">
+                <p class="text-gray-500">Loading logs...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- History -->
+    <div id="history-section" class="bg-white shadow rounded-lg p-6 mb-6 hidden">
+        <h3 class="text-lg font-medium text-gray-900 mb-4">Benchmark History</h3>
+        <div class="overflow-hidden">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Run #</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Runtime</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
+                    </tr>
+                </thead>
+                <tbody id="history-table-body" class="bg-white divide-y divide-gray-200">
+                    <!-- Loaded via JavaScript -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Scenarios -->
+    {% if scenarios %}
+    <div class="bg-white shadow rounded-lg p-6">
+        <h3 class="text-lg font-medium text-gray-900 mb-4">Scenarios</h3>
+        <div class="space-y-6">
+            {% for scenario in scenarios %}
+            <div class="border-l-4 border-indigo-500 pl-4">
+                <h4 class="text-md font-semibold text-gray-900">{{ scenario.scenario_name }} - {{ scenario.server_name }}</h4>
+                <dl class="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
+                    <div>
+                        <dt class="text-xs text-gray-500">Requests</dt>
+                        <dd class="text-sm font-medium">{{ scenario.request_count or 0 }}</dd>
+                    </div>
+                    <div>
+                        <dt class="text-xs text-gray-500">p50</dt>
+                        <dd class="text-sm font-medium">{% if scenario.p50_ms %}{{ "%.1f"|format(scenario.p50_ms) }}ms{% else %}-{% endif %}</dd>
+                    </div>
+                    <div>
+                        <dt class="text-xs text-gray-500">p95</dt>
+                        <dd class="text-sm font-medium">{% if scenario.p95_ms %}{{ "%.1f"|format(scenario.p95_ms) }}ms{% else %}-{% endif %}</dd>
+                    </div>
+                    <div>
+                        <dt class="text-xs text-gray-500">Tokens/s</dt>
+                        <dd class="text-sm font-medium">{% if scenario.tokens_per_sec_output %}{{ "%.2f"|format(scenario.tokens_per_sec_output) }}{% else %}-{% endif %}</dd>
+                    </div>
+                </dl>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% else %}
+    <div class="bg-white shadow rounded-lg p-6">
+        <p class="text-gray-500">No scenario results yet.</p>
+    </div>
+    {% endif %}
+
+    <!-- Actions -->
+    <div class="mt-6 flex space-x-4">
+        <a href="/api/benchmarks/{{ benchmark.uuid }}/export?format=json" class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+            Export JSON
+        </a>
+        <a href="/api/benchmarks/{{ benchmark.uuid }}/export?format=csv" class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+            Export CSV
+        </a>
+        <a href="/benchmarks" class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50">
+            Back to List
+        </a>
+    </div>
+</div>
+
+<script>
+const benchmarkUuid = "{{ benchmark.uuid }}";
+
+// Load benchmark history
+async function loadHistory() {
+    try {
+        const response = await fetch(`/api/benchmarks/${benchmarkUuid}/history`);
+        const history = await response.json();
+
+        if (history.length > 1) {
+            // Show history section if there are multiple runs
+            document.getElementById('history-section').classList.remove('hidden');
+
+            const tbody = document.getElementById('history-table-body');
+            tbody.innerHTML = history.map((item, index) => {
+                const statusColors = {
+                    'completed': 'bg-green-100 text-green-800',
+                    'running': 'bg-blue-100 text-blue-800',
+                    'failed': 'bg-red-100 text-red-800',
+                    'pending': 'bg-gray-100 text-gray-800',
+                    'cancelled': 'bg-yellow-100 text-yellow-800'
+                };
+                const statusColor = statusColors[item.status] || 'bg-gray-100 text-gray-800';
+
+                const createdDate = new Date(item.created_at);
+                const createdStr = createdDate.toLocaleString();
+
+                const isCurrentRun = item.uuid === benchmarkUuid;
+
+                return `
+                    <tr class="${isCurrentRun ? 'bg-indigo-50' : ''}">
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                            ${index + 1}${isCurrentRun ? ' (current)' : ''}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${item.name}</td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${statusColor}">
+                                ${item.status}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            ${item.runtime_sec ? item.runtime_sec.toFixed(2) + 's' : '-'}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${createdStr}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            ${!isCurrentRun ? `<a href="/benchmarks/${item.uuid}" class="text-indigo-600 hover:text-indigo-900">View</a>` : ''}
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+    } catch (error) {
+        console.error('Failed to load history:', error);
+    }
+}
+
+// Cancel button handler
+const cancelBtn = document.getElementById('cancel-btn');
+if (cancelBtn) {
+    cancelBtn.addEventListener('click', async () => {
+        if (!confirm('Are you sure you want to cancel this benchmark?\n\nThe benchmark execution will be stopped.')) {
+            return;
+        }
+
+        const button = cancelBtn;
+        const originalText = button.innerHTML;
+        button.disabled = true;
+        button.innerHTML = '<svg class="animate-spin h-4 w-4 mr-2 inline" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Cancelling...';
+
+        try {
+            const response = await fetch(`/api/benchmarks/${benchmarkUuid}/cancel`, {
+                method: 'POST'
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.detail || 'Failed to cancel benchmark');
+            }
+
+            const data = await response.json();
+
+            // Reload the page to show updated status
+            window.location.reload();
+        } catch (error) {
+            alert(`Error: ${error.message}`);
+            button.disabled = false;
+            button.innerHTML = originalText;
+        }
+    });
+}
+
+// Rerun button handler
+document.getElementById('rerun-btn').addEventListener('click', async () => {
+    if (!confirm('Are you sure you want to rerun this benchmark?\n\nA new benchmark run will be created with the same configuration and will start executing immediately.')) {
+        return;
+    }
+
+    const button = document.getElementById('rerun-btn');
+    const originalText = button.innerHTML;
+    button.disabled = true;
+    button.innerHTML = '<svg class="animate-spin h-4 w-4 mr-2 inline" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Rerunning...';
+
+    try {
+        const formData = new FormData();
+        formData.append('auto_run', 'true');
+
+        const response = await fetch(`/api/benchmarks/${benchmarkUuid}/rerun`, {
+            method: 'POST',
+            body: formData
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to rerun benchmark');
+        }
+
+        const data = await response.json();
+
+        // Redirect to the new benchmark
+        window.location.href = `/benchmarks/${data.uuid}`;
+    } catch (error) {
+        alert(`Error: ${error.message}`);
+        button.disabled = false;
+        button.innerHTML = originalText;
+    }
+});
+
+// Load history on page load
+loadHistory();
+
+// ===== Log Viewer =====
+let lastLogId = 0;
+let autoRefreshEnabled = true;
+let logRefreshInterval = null;
+
+// Format log timestamp
+function formatLogTime(isoString) {
+    const date = new Date(isoString);
+    return date.toLocaleTimeString();
+}
+
+// Get log level color
+function getLogLevelClass(level) {
+    const colors = {
+        'INFO': 'text-blue-600',
+        'WARNING': 'text-yellow-600',
+        'ERROR': 'text-red-600',
+        'DEBUG': 'text-gray-600'
+    };
+    return colors[level] || 'text-gray-600';
+}
+
+// Load logs
+async function loadLogs() {
+    try {
+        const response = await fetch(`/api/benchmarks/${benchmarkUuid}/logs?since_id=${lastLogId}`);
+        const logs = await response.json();
+
+        if (logs.length > 0) {
+            const logsContent = document.getElementById('logs-content');
+
+            // Remove "loading" message on first load
+            if (lastLogId === 0) {
+                logsContent.innerHTML = '';
+            }
+
+            // Append new logs
+            logs.forEach(log => {
+                const logLine = document.createElement('div');
+                logLine.className = 'flex items-start space-x-2';
+                logLine.innerHTML = `
+                    <span class="text-gray-400">${formatLogTime(log.timestamp)}</span>
+                    <span class="${getLogLevelClass(log.level)} font-semibold">[${log.level}]</span>
+                    <span class="text-gray-600">[${log.source}]</span>
+                    <span class="text-gray-900">${log.message}</span>
+                `;
+                logsContent.appendChild(logLine);
+                lastLogId = log.id;
+            });
+
+            // Auto-scroll to bottom
+            const logsContainer = document.getElementById('logs-container');
+            logsContainer.scrollTop = logsContainer.scrollHeight;
+
+            // Update status
+            document.getElementById('log-status').textContent = `${lastLogId} logs`;
+        }
+    } catch (error) {
+        console.error('Failed to load logs:', error);
+    }
+}
+
+// Toggle auto-refresh
+document.getElementById('toggle-auto-refresh').addEventListener('click', () => {
+    autoRefreshEnabled = !autoRefreshEnabled;
+    const statusSpan = document.getElementById('auto-refresh-status');
+
+    if (autoRefreshEnabled) {
+        statusSpan.textContent = 'ON';
+        startLogPolling();
+    } else {
+        statusSpan.textContent = 'OFF';
+        if (logRefreshInterval) {
+            clearInterval(logRefreshInterval);
+            logRefreshInterval = null;
+        }
+    }
+});
+
+// Start log polling
+function startLogPolling() {
+    if (logRefreshInterval) {
+        clearInterval(logRefreshInterval);
+    }
+
+    // Load immediately
+    loadLogs();
+
+    // Then poll every 2 seconds
+    logRefreshInterval = setInterval(loadLogs, 2000);
+}
+
+// Start log viewer
+startLogPolling();
+</script>
+{% endblock %}

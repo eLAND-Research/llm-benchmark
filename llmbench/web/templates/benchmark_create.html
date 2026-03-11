@@ -1,0 +1,696 @@
+{% extends "base.html" %}
+
+{% block title %}Create Benchmark - LLMBench{% endblock %}
+
+{% block content %}
+<div class="px-4 sm:px-0 max-w-4xl mx-auto">
+    <!-- Page Header -->
+    <div class="mb-8">
+        <h2 class="text-3xl font-bold text-gray-900">Create New Benchmark</h2>
+        <p class="mt-2 text-sm text-gray-600">Configure and run a new LLM benchmark</p>
+    </div>
+
+    <!-- Form -->
+    <form id="benchmark-form" class="space-y-6">
+        <!-- Name -->
+        <div class="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
+            <div class="md:grid md:grid-cols-3 md:gap-6">
+                <div class="md:col-span-1">
+                    <h3 class="text-lg font-medium leading-6 text-gray-900">Basic Information</h3>
+                    <p class="mt-1 text-sm text-gray-500">Give your benchmark a name and description</p>
+                </div>
+                <div class="mt-5 md:mt-0 md:col-span-2">
+                    <div class="space-y-4">
+                        <div>
+                            <label for="name" class="block text-sm font-medium text-gray-700">Benchmark Name</label>
+                            <input type="text" name="name" id="name" required
+                                class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
+                                placeholder="e.g., GPT-4 Performance Test">
+                        </div>
+                        <div>
+                            <label for="description" class="block text-sm font-medium text-gray-700">Description (Optional)</label>
+                            <textarea name="description" id="description" rows="2"
+                                class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
+                                placeholder="Describe what this benchmark tests..."></textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Configuration -->
+        <div class="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
+            <div class="md:grid md:grid-cols-3 md:gap-6">
+                <div class="md:col-span-1">
+                    <h3 class="text-lg font-medium leading-6 text-gray-900">Configuration</h3>
+                    <p class="mt-1 text-sm text-gray-500">Configure servers and scenarios</p>
+                </div>
+                <div class="mt-5 md:mt-0 md:col-span-2">
+                    <!-- Config Mode Tabs -->
+                    <div class="mb-4">
+                        <nav class="flex space-x-4" aria-label="Config Mode">
+                            <button type="button" id="tab-easy" class="config-tab px-3 py-2 font-medium text-sm rounded-md bg-indigo-100 text-indigo-700">
+                                Easy Config
+                            </button>
+                            <button type="button" id="tab-yaml" class="config-tab px-3 py-2 font-medium text-sm rounded-md text-gray-500 hover:text-gray-700">
+                                Advanced YAML
+                            </button>
+                        </nav>
+                    </div>
+
+                    <!-- Easy Config Panel -->
+                    <div id="panel-easy" class="config-panel">
+                        <!-- Server Selection -->
+                        <div class="mb-6">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Select Servers</label>
+                            <div class="space-y-2 max-h-48 overflow-y-auto border border-gray-200 rounded-md p-3">
+                                <label class="flex items-start">
+                                    <input type="checkbox" class="server-preset mt-0.5 h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                                           data-preset="gpustack-20b">
+                                    <span class="ml-2 text-sm">
+                                        <span class="font-medium">GPUStack GPT-OSS-20B</span>
+                                        <span class="block text-xs text-gray-500">https://mac-lab.elandai.cloud - gpustack/gpt-oss-20b-GGUF</span>
+                                    </span>
+                                </label>
+                                <label class="flex items-start">
+                                    <input type="checkbox" class="server-preset mt-0.5 h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                                           data-preset="mlx-knife-20b">
+                                    <span class="ml-2 text-sm">
+                                        <span class="font-medium">MLX Knife GPT-OSS-20B</span>
+                                        <span class="block text-xs text-gray-500">https://mac-lab.elandai.cloud - mlx-knife/gpt-oss-20b-MXFP4-Q8</span>
+                                    </span>
+                                </label>
+                                <label class="flex items-start">
+                                    <input type="checkbox" class="server-preset mt-0.5 h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                                           data-preset="ollama-20b">
+                                    <span class="ml-2 text-sm">
+                                        <span class="font-medium">Ollama GPT-OSS-20B</span>
+                                        <span class="block text-xs text-gray-500">https://mac-lab.elandai.cloud - ollama/gpt-oss-20b</span>
+                                    </span>
+                                </label>
+                                <label class="flex items-start">
+                                    <input type="checkbox" class="server-preset mt-0.5 h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                                           data-preset="l40s-20b">
+                                    <span class="ml-2 text-sm">
+                                        <span class="font-medium">L40s GPT-OSS-20B</span>
+                                        <span class="block text-xs text-gray-500">http://gpustack.elandsoft.com/v1 - gpt-oss-20b</span>
+                                    </span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Scenario Selection -->
+                        <div class="mb-6">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Select Scenarios</label>
+                            <div class="space-y-2 border border-gray-200 rounded-md p-3">
+                                <label class="flex items-start">
+                                    <input type="checkbox" class="scenario-preset mt-0.5 h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                                           data-preset="smoke-test">
+                                    <span class="ml-2 text-sm">
+                                        <span class="font-medium">Smoke Test</span>
+                                        <span class="block text-xs text-gray-500">Quick test: 6 runs, concurrency [1], 256 tokens</span>
+                                    </span>
+                                </label>
+                                <label class="flex items-start">
+                                    <input type="checkbox" class="scenario-preset mt-0.5 h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                                           data-preset="throughput-test">
+                                    <span class="ml-2 text-sm">
+                                        <span class="font-medium">Throughput Test</span>
+                                        <span class="block text-xs text-gray-500">24 runs, concurrency [1,2,4,8], 512 tokens</span>
+                                    </span>
+                                </label>
+                                <label class="flex items-start">
+                                    <input type="checkbox" class="scenario-preset mt-0.5 h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                                           data-preset="short-chat">
+                                    <span class="ml-2 text-sm">
+                                        <span class="font-medium">Short Chat</span>
+                                        <span class="block text-xs text-gray-500">12 runs, concurrency [1,2,4], 256 tokens</span>
+                                    </span>
+                                </label>
+                                <label class="flex items-start">
+                                    <input type="checkbox" class="scenario-preset mt-0.5 h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                                           data-preset="quick-test">
+                                    <span class="ml-2 text-sm">
+                                        <span class="font-medium">Quick Test</span>
+                                        <span class="block text-xs text-gray-500">Very fast: 2 runs, concurrency [1], 32 tokens</span>
+                                    </span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Generate Button -->
+                        <div class="flex justify-end">
+                            <button type="button" id="generate-yaml-btn"
+                                class="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+                                <svg class="-ml-1 mr-2 h-5 w-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path>
+                                </svg>
+                                Generate YAML
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- YAML Config Panel -->
+                    <div id="panel-yaml" class="config-panel hidden">
+                        <div>
+                            <label for="config_text" class="block text-sm font-medium text-gray-700">YAML Configuration</label>
+                            <textarea name="config_text" id="config_text" required rows="20"
+                                class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md font-mono text-xs"
+                                placeholder="version: 1&#10;servers:&#10;  - name: my_server&#10;    type: openai_compatible&#10;    base_url: http://localhost:8000/v1&#10;    model: gpt-3.5-turbo&#10;scenarios:&#10;  - name: basic_test&#10;    type: chat_short&#10;    prompts_file: data/prompts/short.jsonl&#10;    runs: 10"></textarea>
+                            <p class="mt-2 text-sm text-gray-500">Enter your benchmark configuration in YAML format</p>
+                            <div class="mt-2">
+                                <button type="button" id="load-example" class="text-sm text-indigo-600 hover:text-indigo-500">
+                                    Load Example Config
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Options -->
+        <div class="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
+            <div class="md:grid md:grid-cols-3 md:gap-6">
+                <div class="md:col-span-1">
+                    <h3 class="text-lg font-medium leading-6 text-gray-900">Execution Options</h3>
+                    <p class="mt-1 text-sm text-gray-500">How should the benchmark run</p>
+                </div>
+                <div class="mt-5 md:mt-0 md:col-span-2">
+                    <div class="flex items-start">
+                        <div class="flex items-center h-5">
+                            <input id="auto_run" name="auto_run" type="checkbox" checked
+                                class="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 rounded">
+                        </div>
+                        <div class="ml-3 text-sm">
+                            <label for="auto_run" class="font-medium text-gray-700">Auto-run benchmark</label>
+                            <p class="text-gray-500">Automatically start benchmark execution after creation</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex justify-end space-x-3">
+            <a href="/benchmarks"
+                class="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                Cancel
+            </a>
+            <button type="button" id="validate-btn"
+                class="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-gray-600 hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
+                Validate Config
+            </button>
+            <button type="submit"
+                class="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                Create Benchmark
+            </button>
+        </div>
+    </form>
+
+    <!-- Validation Result Box -->
+    <div id="validation-result" class="mt-4 hidden">
+        <div class="rounded-md p-4" id="validation-content">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    <svg class="h-5 w-5" id="validation-icon" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                    </svg>
+                </div>
+                <div class="ml-3 flex-1">
+                    <h3 class="text-sm font-medium" id="validation-title"></h3>
+                    <div class="mt-2 text-sm" id="validation-details"></div>
+                    <button type="button" id="close-validation" class="mt-2 text-sm underline hover:no-underline">
+                        Dismiss
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Status Messages -->
+    <div id="status-message" class="mt-4 hidden">
+        <div class="rounded-md p-4" id="status-content">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    <svg class="h-5 w-5" id="status-icon" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                    </svg>
+                </div>
+                <div class="ml-3">
+                    <p class="text-sm font-medium" id="status-text"></p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// ===== Preset Definitions =====
+const serverPresets = {
+    'gpustack-20b': {
+        name: 'gpustack-gpt-oss-20b-gguf',
+        type: 'openai_compatible',
+        base_url: 'https://mac-lab.elandai.cloud',
+        api_key: 'sk-1234',
+        model: 'gpustack/gpt-oss-20b-GGUF',
+        timeout_seconds: 90,
+        max_retries: 3
+    },
+    'mlx-knife-20b': {
+        name: 'mlx-knife-gpt-oss-20b-q8',
+        type: 'openai_compatible',
+        base_url: 'https://mac-lab.elandai.cloud',
+        api_key: 'sk-1234',
+        model: 'mlx-knife/gpt-oss-20b-MXFP4-Q8',
+        timeout_seconds: 90,
+        max_retries: 3
+    },
+    'ollama-20b': {
+        name: 'ollama-gpt-oss-20b',
+        type: 'openai_compatible',
+        base_url: 'https://mac-lab.elandai.cloud',
+        api_key: 'sk-LTHXMISVaibASFdnPAK-dA',
+        model: 'ollama/gpt-oss-20b',
+        timeout_seconds: 90,
+        max_retries: 3
+    },
+    'l40s-20b': {
+        name: 'L40s-gpt-oss-20b',
+        type: 'openai_compatible',
+        base_url: 'http://gpustack.elandsoft.com/v1',
+        api_key: 'gpustack_e3da48eb55daaa22_6f1ffa49ae7b34ecbe71ca2435ad0cb0',
+        model: 'gpt-oss-20b',
+        timeout_seconds: 90,
+        max_retries: 3
+    }
+};
+
+const scenarioPresets = {
+    'smoke-test': {
+        name: 'short_chat_smoke',
+        type: 'chat_short',
+        prompts_file: 'data/prompts/gpustack_short.jsonl',
+        runs: 6,
+        concurrency: [1],
+        request: {
+            max_output_tokens: 256,
+            temperature: 0.7,
+            stream: false
+        }
+    },
+    'throughput-test': {
+        name: 'throughput_scale',
+        type: 'chat_short',
+        prompts_file: 'data/prompts/gpustack_short.jsonl',
+        runs: 24,
+        concurrency: [1, 2, 4, 8],
+        request: {
+            max_output_tokens: 512,
+            temperature: 0.9,
+            stream: false
+        }
+    },
+    'short-chat': {
+        name: 'short_chat',
+        type: 'chat_short',
+        prompts_file: 'data/prompts/gpustack_short.jsonl',
+        runs: 12,
+        concurrency: [1, 2, 4],
+        request: {
+            max_output_tokens: 256,
+            temperature: 1.0,
+            stream: false
+        }
+    },
+    'quick-test': {
+        name: 'quick_test',
+        type: 'chat_short',
+        prompts_file: 'data/prompts/gpustack_short.jsonl',
+        runs: 2,
+        concurrency: [1],
+        request: {
+            max_output_tokens: 32,
+            temperature: 0.7,
+            stream: false
+        }
+    }
+};
+
+// Example configuration
+const exampleConfig = `version: 1
+metadata:
+  experiment_name: my_benchmark
+  description: "Example benchmark configuration"
+  seed: 42
+
+servers:
+  - name: mock_server
+    type: mock
+    base_url: http://localhost
+    model: test-model
+
+scenarios:
+  - name: quick_test
+    type: chat_short
+    prompts_file: data/prompts/short.jsonl
+    runs: 10
+    concurrency: [1, 2]
+    request:
+      max_output_tokens: 50
+      temperature: 0.7
+
+quality:
+  perplexity:
+    enabled: false
+  qa_accuracy:
+    enabled: false
+
+metrics: {}
+
+report:
+  formats: [markdown, json]
+  output_dir: results/my_benchmark
+
+storage:
+  backend: json
+  path: results/my_benchmark/raw
+
+warmup:
+  requests: 0
+
+retry_policy:
+  strategy: exponential_backoff
+  base_delay_ms: 200
+  max_attempts: 3
+
+cost_model:
+  enabled: false
+
+remote_metrics: []`;
+
+// ===== Tab Switching =====
+document.getElementById('tab-easy').addEventListener('click', () => {
+    // Update tabs
+    document.getElementById('tab-easy').className = 'config-tab px-3 py-2 font-medium text-sm rounded-md bg-indigo-100 text-indigo-700';
+    document.getElementById('tab-yaml').className = 'config-tab px-3 py-2 font-medium text-sm rounded-md text-gray-500 hover:text-gray-700';
+
+    // Update panels
+    document.getElementById('panel-easy').classList.remove('hidden');
+    document.getElementById('panel-yaml').classList.add('hidden');
+});
+
+document.getElementById('tab-yaml').addEventListener('click', () => {
+    // Update tabs
+    document.getElementById('tab-yaml').className = 'config-tab px-3 py-2 font-medium text-sm rounded-md bg-indigo-100 text-indigo-700';
+    document.getElementById('tab-easy').className = 'config-tab px-3 py-2 font-medium text-sm rounded-md text-gray-500 hover:text-gray-700';
+
+    // Update panels
+    document.getElementById('panel-yaml').classList.remove('hidden');
+    document.getElementById('panel-easy').classList.add('hidden');
+});
+
+// ===== YAML Generation =====
+document.getElementById('generate-yaml-btn').addEventListener('click', () => {
+    // Get selected servers
+    const selectedServers = [];
+    document.querySelectorAll('.server-preset:checked').forEach(checkbox => {
+        const presetKey = checkbox.dataset.preset;
+        const preset = serverPresets[presetKey];
+        if (preset) {
+            selectedServers.push(preset);
+        }
+    });
+
+    // Get selected scenarios
+    const selectedScenarios = [];
+    document.querySelectorAll('.scenario-preset:checked').forEach(checkbox => {
+        const presetKey = checkbox.dataset.preset;
+        const preset = scenarioPresets[presetKey];
+        if (preset) {
+            selectedScenarios.push(preset);
+        }
+    });
+
+    // Validate selections
+    if (selectedServers.length === 0) {
+        alert('Please select at least one server');
+        return;
+    }
+    if (selectedScenarios.length === 0) {
+        alert('Please select at least one scenario');
+        return;
+    }
+
+    // Generate YAML
+    const yaml = generateYAML(selectedServers, selectedScenarios);
+
+    // Update textarea
+    document.getElementById('config_text').value = yaml;
+
+    // Switch to YAML tab
+    document.getElementById('tab-yaml').click();
+
+    // Show success message
+    showStatus(`Generated YAML with ${selectedServers.length} server(s) and ${selectedScenarios.length} scenario(s)`, true);
+});
+
+function generateYAML(servers, scenarios) {
+    let yaml = `version: 1
+metadata:
+  experiment_name: custom_benchmark
+  description: "Auto-generated from presets"
+  seed: 42
+
+servers:
+`;
+
+    // Add servers
+    servers.forEach(server => {
+        yaml += `  - name: ${server.name}
+    type: ${server.type}
+    base_url: ${server.base_url}
+    api_key: ${server.api_key}
+    model: ${server.model}
+    timeout_seconds: ${server.timeout_seconds}
+    max_retries: ${server.max_retries}
+    extra: {}
+`;
+    });
+
+    yaml += `
+scenarios:
+`;
+
+    // Add scenarios
+    scenarios.forEach(scenario => {
+        yaml += `  - name: ${scenario.name}
+    type: ${scenario.type}
+    prompts_file: ${scenario.prompts_file}
+    runs: ${scenario.runs}
+    concurrency: [${scenario.concurrency.join(', ')}]
+    request:
+      max_output_tokens: ${scenario.request.max_output_tokens}
+      temperature: ${scenario.request.temperature}
+      stream: ${scenario.request.stream}
+`;
+    });
+
+    yaml += `
+quality:
+  perplexity:
+    enabled: false
+  qa_accuracy:
+    enabled: false
+
+metrics: {}
+
+report:
+  formats: [markdown, json]
+  output_dir: results/custom_benchmark
+
+storage:
+  backend: json
+  path: results/custom_benchmark/raw
+
+warmup:
+  requests: 2
+
+retry_policy:
+  strategy: exponential_backoff
+  base_delay_ms: 250
+  max_attempts: 3
+
+cost_model:
+  enabled: false
+
+remote_metrics: []
+`;
+
+    return yaml;
+}
+
+// Load example config
+document.getElementById('load-example').addEventListener('click', () => {
+    document.getElementById('config_text').value = exampleConfig;
+});
+
+// Show status message
+function showStatus(message, isSuccess) {
+    const statusDiv = document.getElementById('status-message');
+    const statusContent = document.getElementById('status-content');
+    const statusText = document.getElementById('status-text');
+
+    statusText.textContent = message;
+    statusDiv.classList.remove('hidden');
+
+    if (isSuccess) {
+        statusContent.className = 'rounded-md bg-green-50 p-4';
+        statusContent.querySelector('svg').className = 'h-5 w-5 text-green-400';
+        statusText.className = 'text-sm font-medium text-green-800';
+    } else {
+        statusContent.className = 'rounded-md bg-red-50 p-4';
+        statusContent.querySelector('svg').className = 'h-5 w-5 text-red-400';
+        statusText.className = 'text-sm font-medium text-red-800';
+    }
+
+    // Hide after 5 seconds
+    setTimeout(() => {
+        statusDiv.classList.add('hidden');
+    }, 5000);
+}
+
+// Show validation result (persistent until dismissed)
+function showValidationResult(isValid, data) {
+    const validationDiv = document.getElementById('validation-result');
+    const validationContent = document.getElementById('validation-content');
+    const validationTitle = document.getElementById('validation-title');
+    const validationDetails = document.getElementById('validation-details');
+    const validationIcon = document.getElementById('validation-icon');
+
+    validationDiv.classList.remove('hidden');
+
+    if (isValid) {
+        validationContent.className = 'rounded-md bg-green-50 p-4';
+        validationIcon.className = 'h-5 w-5 text-green-400';
+        validationTitle.className = 'text-sm font-medium text-green-800';
+        validationTitle.textContent = 'Configuration is Valid ✓';
+
+        // Show detailed info
+        const details = `
+            <p class="text-green-700"><strong>Fingerprint:</strong> ${data.fingerprint}</p>
+            <p class="text-green-700 mt-1"><strong>Servers:</strong> ${data.servers ? data.servers.length : 0}</p>
+            <p class="text-green-700 mt-1"><strong>Scenarios:</strong> ${data.scenarios ? data.scenarios.length : 0}</p>
+        `;
+        validationDetails.innerHTML = details;
+        validationDetails.className = 'mt-2 text-sm text-green-700';
+    } else {
+        validationContent.className = 'rounded-md bg-red-50 p-4';
+        validationIcon.className = 'h-5 w-5 text-red-400';
+        validationTitle.className = 'text-sm font-medium text-red-800';
+        validationTitle.textContent = 'Configuration is Invalid ✗';
+
+        // Show error details
+        validationDetails.innerHTML = `<p class="text-red-700"><strong>Error:</strong> ${data.error || 'Unknown error'}</p>`;
+        validationDetails.className = 'mt-2 text-sm text-red-700';
+    }
+}
+
+// Close validation result
+document.getElementById('close-validation').addEventListener('click', () => {
+    document.getElementById('validation-result').classList.add('hidden');
+});
+
+// Validate config
+document.getElementById('validate-btn').addEventListener('click', async () => {
+    const config_text = document.getElementById('config_text').value;
+
+    if (!config_text.trim()) {
+        showStatus('Please enter a configuration', false);
+        return;
+    }
+
+    // Show loading state
+    const validateBtn = document.getElementById('validate-btn');
+    const originalText = validateBtn.textContent;
+    validateBtn.textContent = 'Validating...';
+    validateBtn.disabled = true;
+
+    try {
+        const formData = new FormData();
+        formData.append('config_text', config_text);
+
+        const response = await fetch('/api/validate-config', {
+            method: 'POST',
+            body: formData
+        });
+
+        const data = await response.json();
+
+        // Show persistent validation result
+        showValidationResult(data.valid, data);
+
+    } catch (error) {
+        showValidationResult(false, { error: error.message });
+    } finally {
+        // Restore button state
+        validateBtn.textContent = originalText;
+        validateBtn.disabled = false;
+    }
+});
+
+// Submit form
+document.getElementById('benchmark-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const benchmarkName = document.getElementById('name').value;
+    const autoRun = document.getElementById('auto_run').checked;
+
+    // Show confirmation dialog
+    const confirmMessage = autoRun
+        ? `Are you sure you want to create and run the benchmark "${benchmarkName}"?\n\nThe benchmark will start executing immediately.`
+        : `Are you sure you want to create the benchmark "${benchmarkName}"?\n\nYou can manually start it later.`;
+
+    if (!confirm(confirmMessage)) {
+        return; // User cancelled
+    }
+
+    const formData = new FormData();
+    formData.append('name', benchmarkName);
+    formData.append('description', document.getElementById('description').value);
+    formData.append('config_text', document.getElementById('config_text').value);
+    formData.append('auto_run', autoRun);
+
+    // Show loading state on submit button
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    const originalText = submitBtn.textContent;
+    submitBtn.textContent = 'Creating...';
+    submitBtn.disabled = true;
+
+    try {
+        const response = await fetch('/api/benchmarks', {
+            method: 'POST',
+            body: formData
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Failed to create benchmark');
+        }
+
+        const data = await response.json();
+        showStatus(`Benchmark created successfully! UUID: ${data.uuid}`, true);
+
+        // Redirect to benchmark detail page after 2 seconds
+        setTimeout(() => {
+            window.location.href = `/benchmarks/${data.uuid}`;
+        }, 2000);
+    } catch (error) {
+        showStatus(`Error: ${error.message}`, false);
+        // Restore button state on error
+        submitBtn.textContent = originalText;
+        submitBtn.disabled = false;
+    }
+});
+</script>
+{% endblock %}

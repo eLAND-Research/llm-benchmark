@@ -1,0 +1,57 @@
+version: 1
+metadata:
+  experiment_name: simple_test
+  description: "Simple benchmark test - completes in under 1 minute"
+  seed: 42
+
+servers:
+  # Test with one real server from MLX config
+  - name: gpustack-gpt-oss-20b
+    type: openai_compatible
+    base_url: https://mac-lab.elandai.cloud
+    api_key: sk-1234
+    model: gpustack/gpt-oss-20b-GGUF
+    timeout_seconds: 30        # Reduced timeout
+    max_retries: 1             # Only 1 retry to save time
+    extra: {}
+
+scenarios:
+  # Very minimal test - should complete in <1 min
+  - name: quick_test
+    type: chat_short
+    prompts_file: data/prompts/gpustack_short.jsonl
+    runs: 2                    # Only 2 requests
+    concurrency: [1]           # Single concurrent request
+    request:
+      max_output_tokens: 32    # Very short output to speed up
+      temperature: 0.7
+      stream: false
+
+quality:
+  perplexity:
+    enabled: false
+  qa_accuracy:
+    enabled: false
+
+metrics: {}
+
+report:
+  formats: [markdown, json]
+  output_dir: results/simple_test
+
+storage:
+  backend: json
+  path: results/simple_test/raw
+
+warmup:
+  requests: 0                  # Skip warmup to save time
+
+retry_policy:
+  strategy: exponential_backoff
+  base_delay_ms: 200
+  max_attempts: 1              # Only 1 attempt, no retries
+
+cost_model:
+  enabled: false
+
+remote_metrics: []

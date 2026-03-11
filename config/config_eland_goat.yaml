@@ -1,0 +1,64 @@
+version: 1
+metadata:
+  experiment_name: eland_goat_gemma_27b_test
+  description: "Benchmark for eland-goat-gemma-27b model"
+  seed: 42
+
+servers:
+  - name: eland-goat-gemma-27b
+    type: openai_compatible
+    base_url: https://llmgw.elandai.cloud
+    api_key: sk-J4miWhpBk4GTUQZ2HYA63Q
+    model: eland-goat-gemma-27b
+    timeout_seconds: 120
+    max_retries: 3
+
+scenarios:
+  - name: short_chat
+    type: chat_short
+    prompts_file: data/prompts/short.jsonl
+    runs: 20
+    concurrency: [1, 2, 4]
+    request:
+      max_output_tokens: 256
+      temperature: 0.7
+      stream: false
+
+  - name: short_chat_streaming
+    type: chat_short
+    prompts_file: data/prompts/short.jsonl
+    runs: 20
+    concurrency: [1, 2, 4]
+    request:
+      max_output_tokens: 256
+      temperature: 0.7
+      stream: true
+
+quality:
+  perplexity:
+    enabled: false
+  qa_accuracy:
+    enabled: false
+
+metrics: {}
+
+report:
+  formats: [markdown, json]
+  output_dir: results/eland_goat_test
+
+storage:
+  backend: json
+  path: results/eland_goat_test/raw
+
+warmup:
+  requests: 2
+
+retry_policy:
+  strategy: exponential_backoff
+  base_delay_ms: 1000
+  max_attempts: 3
+
+cost_model:
+  enabled: false
+
+remote_metrics: []

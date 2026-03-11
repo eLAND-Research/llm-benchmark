@@ -1,0 +1,110 @@
+version: 1
+metadata:
+  experiment_name: eland_all_models_benchmark_v5
+  description: "Benchmark for all eLAND models"
+  seed: 42
+
+servers:
+  - name: ollama-gpt-oss-120b
+    type: openai_compatible
+    base_url: https://llmgw.elandai.cloud
+    api_key: sk-geazk_5TxCYlQwf_j0c39w
+    model: ollama/gpt-oss-120b
+    timeout_seconds: 180
+    max_retries: 3
+
+  - name: ollama-gpt-oss-20b
+    type: openai_compatible
+    base_url: https://llmgw.elandai.cloud
+    api_key: sk-geazk_5TxCYlQwf_j0c39w
+    model: ollama/gpt-oss:20b
+    timeout_seconds: 180
+    max_retries: 3
+
+  - name: gpt-4o-mini
+    type: openai_compatible
+    base_url: https://llmgw.elandai.cloud
+    api_key: sk-geazk_5TxCYlQwf_j0c39w
+    model: gpt-4o-mini
+    timeout_seconds: 180
+    max_retries: 3
+
+  - name: eland-goat-gemma-27b
+    type: openai_compatible
+    base_url: https://llmgw.elandai.cloud
+    api_key: sk-geazk_5TxCYlQwf_j0c39w
+    model: eland-goat-gemma-27b
+    timeout_seconds: 180
+    max_retries: 3
+
+  - name: eland-goat-large
+    type: openai_compatible
+    base_url: https://llmgw.elandai.cloud
+    api_key: sk-geazk_5TxCYlQwf_j0c39w
+    model: eland-goat-large
+    timeout_seconds: 180
+    max_retries: 3
+
+  - name: eland-goat-pro
+    type: openai_compatible
+    base_url: https://llmgw.elandai.cloud
+    api_key: sk-geazk_5TxCYlQwf_j0c39w
+    model: eland-goat-pro
+    timeout_seconds: 180
+    max_retries: 3
+
+  - name: eland-goat-turbo
+    type: openai_compatible
+    base_url: https://llmgw.elandai.cloud
+    api_key: sk-geazk_5TxCYlQwf_j0c39w
+    model: eland-goat-turbo
+    timeout_seconds: 180
+    max_retries: 3
+
+  - name: eland-goat-t1
+    type: openai_compatible
+    base_url: https://llmgw.elandai.cloud
+    api_key: sk-geazk_5TxCYlQwf_j0c39w
+    model: eland-goat-t1
+    timeout_seconds: 180
+    max_retries: 3
+
+scenarios:
+  - name: short_chat_streaming
+    type: chat_short
+    prompts_file: data/prompts/short.jsonl
+    runs: 20
+    concurrency: [1, 2, 4]
+    request:
+      max_output_tokens: 256
+      temperature: 0.7
+      stream: true
+
+quality:
+  perplexity:
+    enabled: false
+  qa_accuracy:
+    enabled: false
+
+metrics: {}
+
+report:
+  formats: [markdown, json]
+  output_dir: results/eland_all_models_v5
+
+storage:
+  backend: json
+  path: results/eland_all_models_v5/raw
+
+warmup:
+  requests: 2
+
+retry_policy:
+  strategy: exponential_backoff
+  base_delay_ms: 1000
+  max_attempts: 3
+
+cost_model:
+  enabled: false
+
+remote_metrics: []

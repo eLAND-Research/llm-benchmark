@@ -1,0 +1,80 @@
+version: 1
+metadata:
+  experiment_name: mlx_120b_local_smoke
+  description: "Benchmark mlx-community/gpt-oss-120b-MXFP4-Q8 (local server) with short chat prompts"
+  seed: 77
+servers:
+  - name: ollama-gpt-oss-20b-gguf
+    type: openai_compatible
+    base_url: https://mac-lab.elandai.cloud
+    api_key: sk-LTHXMISVaibASFdnPAK-dA
+    model: ollama/gpt-oss-20b
+    timeout_seconds: 90
+    max_retries: 3
+    extra: {}
+  - name: L40s-gpt-oss-20b
+    type: openai_compatible
+    base_url: http://gpustack.elandsoft.com/v1
+    api_key: gpustack_e3da48eb55daaa22_6f1ffa49ae7b34ecbe71ca2435ad0cb0
+    model: gpt-oss-20b
+    timeout_seconds: 90
+    max_retries: 3
+    extra: {}
+  - name: mlx-knife-gpt-oss-20b-q8
+    type: openai_compatible
+    base_url: https://mac-lab.elandai.cloud
+    api_key: sk-1234
+    model: mlx-knife/gpt-oss-20b-MXFP4-Q8
+    timeout_seconds: 90
+    max_retries: 3
+    extra: {}
+  - name: gpustack-gpt-oss-20b-gguf
+    type: openai_compatible
+    base_url: https://mac-lab.elandai.cloud
+    api_key: sk-1234
+    model: gpustack/gpt-oss-20b-GGUF
+    timeout_seconds: 90
+    max_retries: 3
+    extra: {}
+scenarios:
+  # 極小煙霧測試，確認可用性與基本延遲
+  - name: short_chat_smoke
+    type: chat_short
+    prompts_file: data/prompts/gpustack_short.jsonl
+    runs: 6
+    concurrency: [1]
+    request:
+      max_output_tokens: 256   # 煙霧測試先降低生成長度
+      temperature: 0.7
+      stream: false
+  # 吞吐與並發曲線（逐步擴張）
+  - name: throughput_scale
+    type: chat_short
+    prompts_file: data/prompts/gpustack_short.jsonl
+    runs: 24               # 會循環 prompts
+    concurrency: [1, 2, 4, 8]
+    request:
+      max_output_tokens: 512
+      temperature: 0.9
+      stream: false
+quality:
+  perplexity:
+    enabled: false
+  qa_accuracy:
+    enabled: false
+metrics: {}
+report:
+  formats: [markdown, json]
+  output_dir: results/mlx_120b_local
+storage:
+  backend: json
+  path: results/mlx_120b_local/raw
+warmup:
+  requests: 2
+retry_policy:
+  strategy: exponential_backoff
+  base_delay_ms: 300
+  max_attempts: 3
+cost_model:
+  enabled: false
+remote_metrics: []

@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+
+{% block title %}Error {{ code }} - LLMBench{% endblock %}
+
+{% block content %}
+<div class="px-4 sm:px-0 text-center py-12">
+    <h2 class="text-6xl font-bold text-gray-900 mb-4">{{ code }}</h2>
+    <p class="text-xl text-gray-600 mb-8">{{ error }}</p>
+    <a href="/" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700">
+        Go Home
+    </a>
+</div>
+{% endblock %}

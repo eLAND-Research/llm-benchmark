@@ -1,0 +1,48 @@
+qual:
+  # === 資料來源 (TDS MCP) ===
+  data_source:
+    mcp_url: "http://172.18.10.41:8888/sse"
+    searches:
+      - categories: ["news"]
+        keyword: "川普 & 關稅"
+        top_k: 10
+        month_range: { start: "202501", end: "202602" }
+        sort_by: "time"
+      - categories: ["facebook", "dcard"]
+        keyword: "人工智慧"
+        top_k: 10
+        month_range: { start: "202501", end: "202602" }
+        sort_by: "time"
+
+  # === Benchmark 任務設定 ===
+  task_types:
+    - "summarization"
+    - "sentiment"
+    - "classification"
+    - "qa"
+  items_per_task: 5  # MVP 先少量測試
+
+  # === 待測模型 ===
+  models_under_test:
+    - name: "gpt-4o"
+      base_url: "https://api.openai.com/v1"
+      api_key: "env:OPENAI_API_KEY"  # 也可以直接填 key: "sk-xxx..."
+      model: "gpt-4o"
+    # 取消註解以加入更多模型：
+    # - name: "local-llama"
+    #   base_url: "http://localhost:8000/v1"
+    #   api_key: ""
+    #   model: "llama-3-70b"
+
+  # === Judge 設定 ===
+  judge:
+    model:
+      name: "judge-gpt-4o"
+      base_url: "https://api.openai.com/v1"
+      api_key: "env:OPENAI_API_KEY"  # 也可以直接填 key: "sk-xxx..."
+      model: "gpt-4o"
+    max_concurrent: 5
+
+  # === 輸出設定 ===
+  output_dir: "results/qual"
+  db_path: "llmbench_qual.db"

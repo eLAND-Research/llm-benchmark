@@ -1,0 +1,53 @@
+version: 1
+metadata:
+  experiment_name: demo_test
+  description: "Quick demo benchmark with mock adapter"
+  seed: 123
+
+servers:
+  - name: demo_mock_server
+    type: mock
+    base_url: https://mock.local
+    model: demo-model
+    timeout_seconds: 30
+    max_retries: 2
+
+scenarios:
+  - name: demo_chat
+    type: chat_short
+    prompts_file: data/prompts/short.jsonl
+    runs: 10                   # 10 requests total
+    concurrency: [1, 2]        # Test with 1 and 2 concurrent requests
+    request:
+      max_output_tokens: 64
+      temperature: 0.7
+      stream: false
+
+quality:
+  perplexity:
+    enabled: false
+  qa_accuracy:
+    enabled: false
+
+metrics: {}
+
+report:
+  formats: [markdown, json]
+  output_dir: results/demo_test
+
+storage:
+  backend: json
+  path: results/demo_test/raw
+
+warmup:
+  requests: 2                  # 2 warmup requests (discarded)
+
+retry_policy:
+  strategy: exponential_backoff
+  base_delay_ms: 100
+  max_attempts: 2
+
+cost_model:
+  enabled: false
+
+remote_metrics: []

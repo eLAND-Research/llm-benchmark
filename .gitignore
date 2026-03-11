@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+*.egg
+
+# Environment & secrets
+.env
+.env.*
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# macOS
+.DS_Store
+
+# SQLite databases
+*.db
+*.db-shm
+*.db-wal
+
+# Benchmark results & output
+results/
+output/
+
+# MCP config (may contain local paths/keys)
+.mcp.json
+
+# Pytest / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Claude Code
+CLAUDE.md

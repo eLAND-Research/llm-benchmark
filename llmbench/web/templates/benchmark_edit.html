@@ -1,0 +1,297 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Benchmark - LLMBench{% endblock %}
+
+{% block content %}
+<div class="px-4 sm:px-0 max-w-4xl mx-auto">
+    <!-- Page Header -->
+    <div class="mb-8">
+        <h2 class="text-3xl font-bold text-gray-900">Edit Benchmark</h2>
+        <p class="mt-2 text-sm text-gray-600">Modify the configuration and create a new run</p>
+        <p class="mt-1 text-xs text-gray-500">Original UUID: {{ benchmark.uuid }}</p>
+    </div>
+
+    <!-- Form -->
+    <form id="benchmark-form" class="space-y-6">
+        <!-- Name -->
+        <div class="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
+            <div class="md:grid md:grid-cols-3 md:gap-6">
+                <div class="md:col-span-1">
+                    <h3 class="text-lg font-medium leading-6 text-gray-900">Basic Information</h3>
+                    <p class="mt-1 text-sm text-gray-500">Update the name and description for the new run</p>
+                </div>
+                <div class="mt-5 md:mt-0 md:col-span-2">
+                    <div class="space-y-4">
+                        <div>
+                            <label for="name" class="block text-sm font-medium text-gray-700">Benchmark Name</label>
+                            <input type="text" name="name" id="name" required
+                                value="{{ benchmark.name }} (edited)"
+                                class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
+                                placeholder="e.g., GPT-4 Performance Test">
+                        </div>
+                        <div>
+                            <label for="description" class="block text-sm font-medium text-gray-700">Description (Optional)</label>
+                            <textarea name="description" id="description" rows="2"
+                                class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
+                                placeholder="Describe what this benchmark tests...">{{ benchmark.description or '' }}</textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Configuration -->
+        <div class="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
+            <div class="md:grid md:grid-cols-3 md:gap-6">
+                <div class="md:col-span-1">
+                    <h3 class="text-lg font-medium leading-6 text-gray-900">Configuration</h3>
+                    <p class="mt-1 text-sm text-gray-500">Modify the YAML configuration for servers and scenarios</p>
+                </div>
+                <div class="mt-5 md:mt-0 md:col-span-2">
+                    <div>
+                        <label for="config_text" class="block text-sm font-medium text-gray-700">YAML Configuration</label>
+                        <textarea name="config_text" id="config_text" required rows="20"
+                            class="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md font-mono text-xs">{{ benchmark.config_yaml }}</textarea>
+                        <p class="mt-2 text-sm text-gray-500">Modify the benchmark configuration as needed</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Options -->
+        <div class="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
+            <div class="md:grid md:grid-cols-3 md:gap-6">
+                <div class="md:col-span-1">
+                    <h3 class="text-lg font-medium leading-6 text-gray-900">Execution Options</h3>
+                    <p class="mt-1 text-sm text-gray-500">How should the new benchmark run</p>
+                </div>
+                <div class="mt-5 md:mt-0 md:col-span-2">
+                    <div class="flex items-start">
+                        <div class="flex items-center h-5">
+                            <input id="auto_run" name="auto_run" type="checkbox" checked
+                                class="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 rounded">
+                        </div>
+                        <div class="ml-3 text-sm">
+                            <label for="auto_run" class="font-medium text-gray-700">Auto-run benchmark</label>
+                            <p class="text-gray-500">Automatically start benchmark execution after creation</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex justify-end space-x-3">
+            <a href="/benchmarks/{{ benchmark.uuid }}"
+                class="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                Cancel
+            </a>
+            <button type="button" id="validate-btn"
+                class="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-gray-600 hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500">
+                Validate Config
+            </button>
+            <button type="submit"
+                class="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                Save & Create New Run
+            </button>
+        </div>
+    </form>
+
+    <!-- Validation Result Box -->
+    <div id="validation-result" class="mt-4 hidden">
+        <div class="rounded-md p-4" id="validation-content">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    <svg class="h-5 w-5" id="validation-icon" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                    </svg>
+                </div>
+                <div class="ml-3 flex-1">
+                    <h3 class="text-sm font-medium" id="validation-title"></h3>
+                    <div class="mt-2 text-sm" id="validation-details"></div>
+                    <button type="button" id="close-validation" class="mt-2 text-sm underline hover:no-underline">
+                        Dismiss
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Status Messages -->
+    <div id="status-message" class="mt-4 hidden">
+        <div class="rounded-md p-4" id="status-content">
+            <div class="flex">
+                <div class="flex-shrink-0">
+                    <svg class="h-5 w-5" id="status-icon" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                    </svg>
+                </div>
+                <div class="ml-3">
+                    <p class="text-sm font-medium" id="status-text"></p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const originalUuid = "{{ benchmark.uuid }}";
+
+// Show status message
+function showStatus(message, isSuccess) {
+    const statusDiv = document.getElementById('status-message');
+    const statusContent = document.getElementById('status-content');
+    const statusText = document.getElementById('status-text');
+
+    statusText.textContent = message;
+    statusDiv.classList.remove('hidden');
+
+    if (isSuccess) {
+        statusContent.className = 'rounded-md bg-green-50 p-4';
+        statusContent.querySelector('svg').className = 'h-5 w-5 text-green-400';
+        statusText.className = 'text-sm font-medium text-green-800';
+    } else {
+        statusContent.className = 'rounded-md bg-red-50 p-4';
+        statusContent.querySelector('svg').className = 'h-5 w-5 text-red-400';
+        statusText.className = 'text-sm font-medium text-red-800';
+    }
+
+    // Hide after 5 seconds
+    setTimeout(() => {
+        statusDiv.classList.add('hidden');
+    }, 5000);
+}
+
+// Show validation result (persistent until dismissed)
+function showValidationResult(isValid, data) {
+    const validationDiv = document.getElementById('validation-result');
+    const validationContent = document.getElementById('validation-content');
+    const validationTitle = document.getElementById('validation-title');
+    const validationDetails = document.getElementById('validation-details');
+    const validationIcon = document.getElementById('validation-icon');
+
+    validationDiv.classList.remove('hidden');
+
+    if (isValid) {
+        validationContent.className = 'rounded-md bg-green-50 p-4';
+        validationIcon.className = 'h-5 w-5 text-green-400';
+        validationTitle.className = 'text-sm font-medium text-green-800';
+        validationTitle.textContent = 'Configuration is Valid ✓';
+
+        // Show detailed info
+        const details = `
+            <p class="text-green-700"><strong>Fingerprint:</strong> ${data.fingerprint}</p>
+            <p class="text-green-700 mt-1"><strong>Servers:</strong> ${data.servers ? data.servers.length : 0}</p>
+            <p class="text-green-700 mt-1"><strong>Scenarios:</strong> ${data.scenarios ? data.scenarios.length : 0}</p>
+        `;
+        validationDetails.innerHTML = details;
+        validationDetails.className = 'mt-2 text-sm text-green-700';
+    } else {
+        validationContent.className = 'rounded-md bg-red-50 p-4';
+        validationIcon.className = 'h-5 w-5 text-red-400';
+        validationTitle.className = 'text-sm font-medium text-red-800';
+        validationTitle.textContent = 'Configuration is Invalid ✗';
+
+        // Show error details
+        validationDetails.innerHTML = `<p class="text-red-700"><strong>Error:</strong> ${data.error || 'Unknown error'}</p>`;
+        validationDetails.className = 'mt-2 text-sm text-red-700';
+    }
+}
+
+// Close validation result
+document.getElementById('close-validation').addEventListener('click', () => {
+    document.getElementById('validation-result').classList.add('hidden');
+});
+
+// Validate config
+document.getElementById('validate-btn').addEventListener('click', async () => {
+    const config_text = document.getElementById('config_text').value;
+
+    if (!config_text.trim()) {
+        showStatus('Please enter a configuration', false);
+        return;
+    }
+
+    // Show loading state
+    const validateBtn = document.getElementById('validate-btn');
+    const originalText = validateBtn.textContent;
+    validateBtn.textContent = 'Validating...';
+    validateBtn.disabled = true;
+
+    try {
+        const formData = new FormData();
+        formData.append('config_text', config_text);
+
+        const response = await fetch('/api/validate-config', {
+            method: 'POST',
+            body: formData
+        });
+
+        const data = await response.json();
+
+        // Show persistent validation result
+        showValidationResult(data.valid, data);
+
+    } catch (error) {
+        showValidationResult(false, { error: error.message });
+    } finally {
+        // Restore button state
+        validateBtn.textContent = originalText;
+        validateBtn.disabled = false;
+    }
+});
+
+// Submit form - Create edited benchmark
+document.getElementById('benchmark-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const benchmarkName = document.getElementById('name').value;
+    const autoRun = document.getElementById('auto_run').checked;
+
+    // Show confirmation dialog
+    const confirmMessage = `Are you sure you want to create a new benchmark run with the edited configuration "${benchmarkName}"?\n\n${autoRun ? 'The benchmark will start executing immediately.' : 'You can manually start it later.'}`;
+
+    if (!confirm(confirmMessage)) {
+        return; // User cancelled
+    }
+
+    const formData = new FormData();
+    formData.append('name', benchmarkName);
+    formData.append('description', document.getElementById('description').value);
+    formData.append('config_text', document.getElementById('config_text').value);
+    formData.append('auto_run', autoRun);
+
+    // Show loading state on submit button
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    const originalText = submitBtn.textContent;
+    submitBtn.textContent = 'Creating...';
+    submitBtn.disabled = true;
+
+    try {
+        // Create new benchmark (not using the original, this is a fresh edit)
+        const response = await fetch('/api/benchmarks', {
+            method: 'POST',
+            body: formData
+        });
+
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Failed to create benchmark');
+        }
+
+        const data = await response.json();
+        showStatus(`New benchmark created successfully! UUID: ${data.uuid}`, true);
+
+        // Redirect to new benchmark detail page after 2 seconds
+        setTimeout(() => {
+            window.location.href = `/benchmarks/${data.uuid}`;
+        }, 2000);
+    } catch (error) {
+        showStatus(`Error: ${error.message}`, false);
+        // Restore button state on error
+        submitBtn.textContent = originalText;
+        submitBtn.disabled = false;
+    }
+});
+</script>
+{% endblock %}
