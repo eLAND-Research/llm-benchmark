@@ -1,19 +1,17 @@
-# LLMBench
+# llm-benchmark
 
-用於 LLM 推論伺服器的客戶端黑箱效能測試工具。透過 HTTP/HTTPS 測量延遲、吞吐量、串流節奏與錯誤模式，無需存取伺服器端。
+LLM 推論伺服器的客戶端黑箱效能測試工具。透過 HTTP/HTTPS 測量延遲、吞吐量、串流節奏與錯誤模式，無需存取伺服器端。
 
-支援 OpenAI 相容 API、vLLM、HuggingFace TGI、SGLang，以及任何實作 OpenAI chat completions 協定的端點。
+支援任何實作 OpenAI chat completions 協定的端點（vLLM、SGLang、HuggingFace TGI 等）。
 
 ## 功能
 
-- **多伺服器比較** — 單次執行中以相同 prompts 對多個端點進行基準測試
+- **多伺服器比較** — 以相同 prompts 對多個端點進行基準測試
 - **並行度掃描** — 跨可設定的並行等級測試，找出吞吐量飽和點
 - **串流指標** — TTFB、token 間隔、首 token 延遲、抖動 (p95)
 - **可重現性** — 透過 SHA256 設定指紋確保測試條件一致
 - **錯誤分析** — 自動分類（逾時、速率限制、5xx、連線、解析）
-- **指數退避重試** — 含抖動的指數退避，可依執行設定
-- **Web UI** — FastAPI 儀表板，可執行測試、檢視結果、匯出資料
-- **結構化輸出** — Markdown 報告、JSON 摘要、CSV 供後續分析
+- **Web UI** — 儀表板介面，可執行測試、檢視結果、匯出資料
 
 ## 安裝
 
@@ -36,9 +34,6 @@ llmbench validate-config config/config_mock.yaml
 
 # 執行基準測試
 llmbench run config/config_mock.yaml -o results/my_run
-
-# 啟動 Web 伺服器
-llmbench serve --host 0.0.0.0 --port 8000
 ```
 
 ### Web UI
@@ -60,12 +55,11 @@ llmbench serve
 | GET | `/api/benchmarks/{uuid}/status` | 輪詢狀態 |
 | POST | `/api/benchmarks/{uuid}/run` | 觸發執行 |
 | POST | `/api/benchmarks/{uuid}/cancel` | 取消執行 |
-| DELETE | `/api/benchmarks/{uuid}` | 刪除 |
 | GET | `/api/benchmarks/{uuid}/export` | 匯出 (json/csv/md) |
 | GET | `/api/stats` | 儀表板統計 |
 | POST | `/api/validate-config` | 驗證 YAML |
 
-## 設定
+## 設定範例
 
 ```yaml
 version: 1
@@ -74,12 +68,6 @@ servers:
     type: openai_compatible
     base_url: http://localhost:8000/v1
     model: meta-llama/Llama-3-8B
-
-  - name: openai
-    type: openai_compatible
-    base_url: https://api.openai.com/v1
-    api_key: env:OPENAI_API_KEY
-    model: gpt-4o-mini
 
 scenarios:
   - name: short_chat
@@ -115,8 +103,6 @@ API key 可透過 `env:VAR_NAME` 語法注入。
 
 ## 輸出
 
-每次執行產生：
-
 ```
 results/<run_name>/
 ├── scenario-<name>/<server>/
@@ -125,21 +111,6 @@ results/<run_name>/
 ├── global_summary.json   # 跨場景摘要
 ├── report.md             # 可讀報告
 └── concurrency_throughput.csv
-```
-
-## 專案結構
-
-```
-llmbench/
-├── adapters/       # 伺服器轉接器 (OpenAI, Mock)
-├── config/         # YAML schema 與載入器
-├── loadgen/        # 非同步負載產生
-├── orchestrator/   # 測試執行與彙總
-├── report/         # 報告產生
-├── scenarios/      # 測試場景定義
-├── storage/        # SQLite 後端
-├── utils/          # 日誌工具
-└── web/            # FastAPI Web 服務
 ```
 
 ## 開發
