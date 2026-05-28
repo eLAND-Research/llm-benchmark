@@ -33,7 +33,6 @@ output/
 # Data caches / large binaries
 data/taiwan_md_cache/
 data/taiwan_md_cache.rar
-data/exam_bank/raw_archives/
 
 # MCP config (may contain local paths/keys)
 .mcp.json
