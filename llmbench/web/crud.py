@@ -6,7 +6,7 @@ from sqlalchemy import select, func, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from .models import Benchmark, BenchmarkScenario, BenchmarkConcurrency, BenchmarkRequest, Server
+from .models import Benchmark, BenchmarkScenario, BenchmarkConcurrency, BenchmarkRequest, Server, Challenge
 
 
 class BenchmarkCRUD:
@@ -268,5 +268,106 @@ class ServerCRUD:
         """Delete server."""
         await session.execute(
             delete(Server).where(Server.name == name)
+        )
+        await session.flush()
+
+
+class ChallengeCRUD:
+    """CRUD operations for challenges."""
+
+    @staticmethod
+    async def create(
+        session: AsyncSession,
+        name: str,
+        description: Optional[str],
+        task_type: Optional[str],
+        data_jsonl: Optional[str] = None,
+    ) -> Challenge:
+        """Create a new challenge."""
+        row_count = len([l for l in (data_jsonl or "").splitlines() if l.strip()])
+        challenge = Challenge(
+            uuid=str(uuid_lib.uuid4()),
+            name=name,
+            description=description,
+            task_type=task_type,
+            data_jsonl=data_jsonl,
+            row_count=row_count,
+        )
+        session.add(challenge)
+        await session.flush()
+        return challenge
+
+    @staticmethod
+    async def get_by_uuid(session: AsyncSession, uuid: str) -> Optional[Challenge]:
+        """Get challenge by UUID."""
+        result = await session.execute(
+            select(Challenge).where(Challenge.uuid == uuid)
+        )
+        return result.scalar_one_or_none()
+
+    @staticmethod
+    async def list_all(
+        session: AsyncSession,
+        task_type: Optional[str] = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> List[Challenge]:
+        """List challenges with optional filter."""
+        query = select(Challenge).order_by(Challenge.created_at.desc())
+        if task_type:
+            query = query.where(Challenge.task_type == task_type)
+        query = query.limit(limit).offset(offset)
+        result = await session.execute(query)
+        return list(result.scalars().all())
+
+    @staticmethod
+    async def count_all(session: AsyncSession, task_type: Optional[str] = None) -> int:
+        """Count challenges."""
+        query = select(func.count(Challenge.id))
+        if task_type:
+            query = query.where(Challenge.task_type == task_type)
+        result = await session.execute(query)
+        return result.scalar() or 0
+
+    @staticmethod
+    async def update(
+        session: AsyncSession,
+        uuid: str,
+        name: Optional[str] = None,
+        description: Optional[str] = None,
+        task_type: Optional[str] = None,
+        data_jsonl: Optional[str] = None,
+    ) -> Optional[Challenge]:
+        """Update a challenge."""
+        challenge = await ChallengeCRUD.get_by_uuid(session, uuid)
+        if not challenge:
+            return None
+        if name is not None:
+            challenge.name = name
+        if description is not None:
+            challenge.description = description
+        if task_type is not None:
+            challenge.task_type = task_type
+        if data_jsonl is not None:
+            challenge.data_jsonl = data_jsonl
+            challenge.row_count = len([l for l in data_jsonl.splitlines() if l.strip()])
+        await session.flush()
+        return challenge
+
+    @staticmethod
+    async def save_results(session: AsyncSession, uuid: str, results_jsonl: str) -> Optional[Challenge]:
+        """Save generated benchmark item results to the challenge."""
+        challenge = await ChallengeCRUD.get_by_uuid(session, uuid)
+        if not challenge:
+            return None
+        challenge.results_jsonl = results_jsonl
+        await session.flush()
+        return challenge
+
+    @staticmethod
+    async def delete(session: AsyncSession, uuid: str):
+        """Delete a challenge."""
+        await session.execute(
+            delete(Challenge).where(Challenge.uuid == uuid)
         )
         await session.flush()

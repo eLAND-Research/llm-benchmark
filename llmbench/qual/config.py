@@ -27,11 +27,168 @@ class SearchConfig(BaseModel):
     sort_by: str = "time"
 
 
+class OpViewMCPConfig(BaseModel):
+    """OpView MCP data-source accessed via LiteLLM proxy (HTTPS + Bearer Token).
+
+    Rate limits (shared quota):  rpm=30, tpm=200K, max_parallel=5
+    """
+
+    litellm_url: str = "https://llmgw.elandai.cloud"
+    litellm_api_key: str = "env:LITELLM_MCP_API_KEY"
+    mcp_alias: str = "opview_tds"
+    timeout: int = 30
+    max_parallel: int = 5  # match shared quota: max_parallel=5
+
+    @field_validator("litellm_api_key")
+    @classmethod
+    def resolve_env(cls, v: str) -> str:
+        if v and v.startswith("env:"):
+            env_key = v.split("env:", 1)[1]
+            return os.getenv(env_key) or ""
+        return v
+
+
+class ChallengeSourceConfig(BaseModel):
+    """Use a challenge's JSONL data as qual pipeline source material.
+
+    Each JSONL line should contain at least a ``text`` field.
+    Optional fields: ``title``, ``source_category``, ``keyword``, ``month``.
+    """
+
+    data_jsonl: str = Field(description="Raw JSONL content from a challenge")
+    keyword: str = ""
+
+
+class ThreadsSourceConfig(BaseModel):
+    """Local Threads scraper data source.
+
+    Reads JSON files produced by the threads-scraper project from a local
+    directory.
+    """
+
+    directory: str = Field(description="Path to directory containing *.json scraper output files")
+    keyword: str = ""
+    include_replies: bool = False
+    combine_replies: bool = False
+    min_like_count: int = 0
+    min_replies_count: int = 0
+    min_repost_count: int = 0
+    date_start: Optional[str] = None
+    date_end: Optional[str] = None
+    text_contains: Optional[str] = None
+    min_text_length: int = 0
+    exclude_emoji_only: bool = False
+    limit: Optional[int] = None
+
+
+class TaiwanMdSourceConfig(BaseModel):
+    """Taiwan.md open knowledge base data source (CC BY-SA 4.0).
+
+    Fetches articles from https://github.com/frank890417/taiwan-md
+    """
+
+    categories: Optional[List[str]] = Field(
+        default=None,
+        description='Categories to include, e.g. ["Technology", "History"]. None = all.',
+    )
+    lang: str = Field(default="zh-TW", description='"zh-TW" or "en"')
+    limit: Optional[int] = None
+    timeout: int = 15
+
+
+class SchoolQASourceConfig(BaseModel):
+    """Taiwanese elementary (國小) / middle school (國中) curriculum data source.
+
+    Uses built-in curriculum knowledge materials to generate exam-style
+    benchmark items (選擇題、填充題、問答題).  Optionally loads from a
+    custom JSONL file instead of built-in materials.
+    """
+
+    level: str = Field(
+        default="both",
+        description='"elementary" (國小), "middle_school" (國中), or "both".',
+    )
+    subjects: Optional[List[str]] = Field(
+        default=None,
+        description='Subject names to include, e.g. ["數學", "理化"]. None = all.',
+    )
+    data_jsonl: Optional[str] = Field(
+        default=None,
+        description=(
+            "Path to a custom JSONL file. Each line: "
+            '{"level": ..., "subject": ..., "title": ..., "content": ...}. '
+            "When set, built-in materials are not used."
+        ),
+    )
+    limit: Optional[int] = None
+
+
+class ExamBankSourceConfig(BaseModel):
+    """Taiwanese school exam bank data source.
+
+    Downloads exam PDFs listed in a manifest CSV/JSON and/or extracts PDFs
+    from local zip archives.  Each PDF is parsed with ``pdfplumber`` and
+    converted into a :class:`RawMaterial` for the school_qa pipeline.
+
+    Requires ``pdfplumber`` (``uv add pdfplumber`` / ``pip install pdfplumber``).
+    """
+
+    manifest: Optional[str] = Field(
+        default=None,
+        description="Path to manifest CSV or JSON (columns: file_url, subject, grade, school, ...).",
+    )
+    zip_archives: Optional[List[str]] = Field(
+        default=None,
+        description="Paths to local .zip archives containing exam PDFs.",
+    )
+    level: str = Field(
+        default="both",
+        description='"elementary" (國小), "middle_school" (國中), or "both".',
+    )
+    subjects: Optional[List[str]] = Field(
+        default=None,
+        description='Subject filter, e.g. ["國文", "數學"]. None = all.',
+    )
+    grades: Optional[List[str]] = Field(
+        default=None,
+        description='Grade filter, e.g. ["5", "6"]. None = all.',
+    )
+    cache_dir: str = Field(
+        default="data/exam_bank/pdf_cache",
+        description="Directory for caching downloaded PDFs.",
+    )
+    limit: Optional[int] = None
+    download_timeout: int = 30
+    max_download_workers: int = 4
+    parse_questions: bool = Field(
+        default=False,
+        description=(
+            "When True, directly parse MCQ questions from PDFs and match with answer sheets. "
+            "The Designer LLM is bypassed — each parsed question becomes a BenchmarkItem directly. "
+            "When False (default), the full PDF text is treated as an article for the Designer to generate questions from."
+        ),
+    )
+
+
 class DataSourceConfig(BaseModel):
-    """TDS MCP data-source configuration."""
+    """TDS MCP data-source configuration.
+
+    Supports backends (priority: challenge > taiwan_md > school_qa > threads > opview_mcp > mcp_url):
+    - ``school_qa``: Built-in Taiwanese elementary/middle school curriculum materials
+    - ``taiwan_md``: Taiwan.md open knowledge base (GitHub)
+    - ``threads``: Local Threads scraper JSON files
+    - ``opview_mcp``: OpView MCP via LiteLLM proxy (HTTPS + Bearer Token)
+    - ``mcp_url``: SSE-based MCP server (original)
+    """
 
     mcp_url: str = "http://172.18.10.41:8888/sse"
-    searches: List[SearchConfig]
+    opview_mcp: Optional[OpViewMCPConfig] = None
+    threads: Optional[List[ThreadsSourceConfig]] = None
+    challenge: Optional[ChallengeSourceConfig] = None
+    taiwan_md: Optional[TaiwanMdSourceConfig] = None
+    school_qa: Optional[SchoolQASourceConfig] = None
+    exam_bank: Optional[ExamBankSourceConfig] = None
+    searches: List[SearchConfig] = Field(default_factory=list)
 
 
 class ModelConfig(BaseModel):
@@ -56,7 +213,8 @@ class JudgeConfig(BaseModel):
     """Judge (evaluator) configuration."""
 
     model: ModelConfig
-    max_concurrent: int = 5
+    max_concurrent: int = 4
+    min_request_interval_sec: float = 2.1
 
 
 class QualConfig(BaseModel):
@@ -67,8 +225,10 @@ class QualConfig(BaseModel):
         default_factory=lambda: ["summarization", "sentiment", "classification", "qa"],
     )
     items_per_task: int = 10
+    questions_per_article: int = 10  # for true_false: how many questions to generate per article
     models_under_test: List[ModelConfig]
     judge: JudgeConfig
+    executor_max_concurrent: int = 4
     output_dir: str = "results/qual"
     db_path: str = "llmbench_qual.db"
 

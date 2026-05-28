@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+
+{% block title %}Edit {{ challenge.name }} - LLMBench{% endblock %}
+
+{% block content %}
+<div class="px-4 sm:px-0 max-w-2xl">
+    <div class="mb-6">
+        <a href="/challenges/{{ challenge.uuid }}" class="text-sm text-gray-500 hover:text-gray-700">&larr; Back to Challenge</a>
+        <h2 class="text-2xl font-bold text-gray-900 mt-2">Edit Challenge</h2>
+    </div>
+
+    <div class="bg-white shadow rounded-lg p-6">
+        <form id="editForm" class="space-y-6">
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Name <span class="text-red-500">*</span></label>
+                <input type="text" id="name" required value="{{ challenge.name }}"
+                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 border px-3 py-2 text-sm">
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Description</label>
+                <textarea id="description" rows="3"
+                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 border px-3 py-2 text-sm">{{ challenge.description or '' }}</textarea>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Task Type</label>
+                <input type="text" id="task_type" value="{{ challenge.task_type or '' }}"
+                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 border px-3 py-2 text-sm"
+                    placeholder="e.g., QA, Summarization, Translation, Coding">
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Replace Data File (JSONL)</label>
+                {% if challenge.row_count > 0 %}
+                <p class="text-xs text-gray-500 mb-1">Current: {{ challenge.row_count }} rows. Upload a new file to replace.</p>
+                {% endif %}
+                <input type="file" id="data_file" accept=".jsonl,.ndjson"
+                    class="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100">
+                <p class="mt-1 text-xs text-gray-500">Leave empty to keep existing data.</p>
+            </div>
+
+            <div id="errorMsg" class="hidden text-sm text-red-600 bg-red-50 rounded p-3"></div>
+
+            <div class="flex justify-between">
+                <button type="button" onclick="deleteChallenge()"
+                    class="inline-flex items-center px-4 py-2 border border-red-300 text-sm font-medium rounded-md text-red-700 bg-white hover:bg-red-50">
+                    Delete Challenge
+                </button>
+                <div class="flex space-x-3">
+                    <a href="/challenges/{{ challenge.uuid }}" class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+                        Cancel
+                    </a>
+                    <button type="submit"
+                        class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700">
+                        Save Changes
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const challengeUuid = '{{ challenge.uuid }}';
+
+document.getElementById('editForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const errorEl = document.getElementById('errorMsg');
+    errorEl.classList.add('hidden');
+
+    const formData = new FormData();
+    formData.append('name', document.getElementById('name').value);
+    formData.append('description', document.getElementById('description').value);
+    formData.append('task_type', document.getElementById('task_type').value);
+    const fileInput = document.getElementById('data_file');
+    if (fileInput.files[0]) {
+        formData.append('data_file', fileInput.files[0]);
+    }
+
+    const resp = await fetch(`/api/challenges/${challengeUuid}`, { method: 'PUT', body: formData });
+    const data = await resp.json();
+    if (resp.ok) {
+        window.location.href = `/challenges/${challengeUuid}`;
+    } else {
+        errorEl.textContent = data.detail || 'Failed to update challenge.';
+        errorEl.classList.remove('hidden');
+    }
+});
+
+async function deleteChallenge() {
+    if (!confirm('Delete this challenge? This action cannot be undone.')) return;
+    const resp = await fetch(`/api/challenges/${challengeUuid}`, { method: 'DELETE' });
+    if (resp.ok) {
+        window.location.href = '/challenges';
+    } else {
+        const data = await resp.json();
+        alert('Error: ' + (data.detail || 'Unknown error'));
+    }
+}
+</script>
+{% endblock %}

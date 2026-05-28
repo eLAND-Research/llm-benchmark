@@ -1,0 +1,241 @@
+{% extends "base.html" %}
+
+{% block title %}Import PTT Movie - LLMBench{% endblock %}
+
+{% block content %}
+<div class="px-4 sm:px-0 max-w-2xl">
+    <div class="mb-6">
+        <a href="/challenges" class="text-sm text-gray-500 hover:text-gray-700">&larr; Back to Challenges</a>
+        <h2 class="text-2xl font-bold text-gray-900 mt-2">Import PTT 電影板</h2>
+        <p class="mt-1 text-sm text-gray-500">從 PTT `movie` 看板抓取文章與推文，轉成 challenge 原始資料</p>
+    </div>
+
+    <div class="bg-white shadow rounded-lg p-6">
+        <form id="importForm" class="space-y-6">
+            <div>
+                <label class="block text-sm font-medium text-gray-700">
+                    Challenge 名稱 <span class="text-red-500">*</span>
+                </label>
+                <input type="text" id="name" required
+                    class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                    placeholder="e.g., PTT Movie 近期討論">
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-700">描述</label>
+                <textarea id="description" rows="2"
+                    class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                    placeholder="說明抓取頁數、日期、過濾條件..."></textarea>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">看板</label>
+                    <input type="text" id="board" value="movie"
+                        class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-mono shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">往回抓幾頁</label>
+                    <input type="number" id="pages" value="3" min="1" max="50"
+                        class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium text-gray-700">關鍵字標籤</label>
+                <input type="text" id="keyword" value="movie"
+                    class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                    placeholder="e.g., movie">
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-medium text-gray-600">標題包含</label>
+                    <input type="text" id="title_contains" placeholder="留空 = 不篩選"
+                        class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-600">內文包含</label>
+                    <input type="text" id="text_contains" placeholder="留空 = 不篩選"
+                        class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-medium text-gray-600">開始日期</label>
+                    <input type="date" id="date_start"
+                        class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-600">結束日期</label>
+                    <input type="date" id="date_end"
+                        class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                </div>
+            </div>
+
+            <div class="grid grid-cols-3 gap-4">
+                <div>
+                    <label class="block text-xs font-medium text-gray-600">最低推文分數</label>
+                    <input type="number" id="min_push_count" value="0"
+                        class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-600">每篇最多留言數</label>
+                    <input type="number" id="max_pushes_per_article" value="10" min="1"
+                        class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-600">最短內文長度</label>
+                    <input type="number" id="min_text_length" value="40" min="0"
+                        class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 gap-4">
+                <div>
+                    <label class="block text-xs font-medium text-gray-600">最大筆數</label>
+                    <input type="number" id="limit" placeholder="不限"
+                        class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                </div>
+            </div>
+
+            <div class="space-y-3">
+                <div class="flex items-center gap-3">
+                    <input type="checkbox" id="combine_pushes" checked
+                        class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                    <div>
+                        <label for="combine_pushes" class="text-sm font-medium text-gray-700">合併推文到主文</label>
+                        <p class="text-xs text-gray-500">每筆資料包含文章正文與推文，較適合討論／立場任務</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3">
+                    <input type="checkbox" id="include_pushes"
+                        class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                    <div>
+                        <label for="include_pushes" class="text-sm font-medium text-gray-700">每則推文也各自成為一筆資料</label>
+                        <p class="text-xs text-gray-500">只有在未勾選「合併推文到主文」時會生效</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3">
+                    <input type="checkbox" id="exclude_re_posts" checked
+                        class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                    <div>
+                        <label for="exclude_re_posts" class="text-sm font-medium text-gray-700">排除 `Re:` 回文</label>
+                        <p class="text-xs text-gray-500">避免大量二次討論回文拖慢生成</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3">
+                    <input type="checkbox" id="exclude_fw_posts" checked
+                        class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                    <div>
+                        <label for="exclude_fw_posts" class="text-sm font-medium text-gray-700">排除 `Fw:` 轉文</label>
+                        <p class="text-xs text-gray-500">避免跨板轉貼文干擾題目品質</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3">
+                    <input type="checkbox" id="exclude_announcements" checked
+                        class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                    <div>
+                        <label for="exclude_announcements" class="text-sm font-medium text-gray-700">排除公告文</label>
+                        <p class="text-xs text-gray-500">公告通常很長，對出題與評分效率差</p>
+                    </div>
+                </div>
+            </div>
+
+            <div id="errorMsg" class="hidden text-sm text-red-600 bg-red-50 rounded p-3"></div>
+
+            <div class="flex justify-end space-x-3">
+                <a href="/challenges"
+                    class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+                    取消
+                </a>
+                <button type="submit" id="submitBtn"
+                    class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50">
+                    匯入
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function formatPttImportSummary(summary) {
+    if (!summary) return '';
+    const lines = [
+        `索引頁：要求 ${summary.pages_requested} 頁，實際抓到 ${summary.pages_loaded} 頁`,
+        `索引文章數：${summary.index_entries_seen}`,
+        `實際載入文章頁：${summary.articles_loaded}`,
+        `輸出資料筆數：${summary.output_materials}`,
+        `略過重複：${summary.skipped_duplicate}`,
+        `略過推文分數不足：${summary.skipped_min_push_count}`,
+        `略過 Re/Fw/公告：${summary.skipped_title_prefix}`,
+        `略過標題不符：${summary.skipped_title_contains}`,
+        `略過空內容：${summary.skipped_empty_content}`,
+        `略過開始日期前：${summary.skipped_date_start}`,
+        `略過結束日期後：${summary.skipped_date_end}`,
+        `略過內文太短：${summary.skipped_min_text_length}`,
+        `略過內文關鍵字不符：${summary.skipped_text_contains}`,
+        `抓取失敗：${summary.fetch_failures}`,
+    ];
+    return lines.join('\n');
+}
+
+document.getElementById('importForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const errorEl = document.getElementById('errorMsg');
+    const submitBtn = document.getElementById('submitBtn');
+    errorEl.classList.add('hidden');
+    submitBtn.disabled = true;
+    submitBtn.textContent = '匯入中...';
+
+    const formData = new FormData();
+    formData.append('name', document.getElementById('name').value);
+    formData.append('description', document.getElementById('description').value);
+    formData.append('board', document.getElementById('board').value);
+    formData.append('pages', document.getElementById('pages').value || '1');
+    formData.append('keyword', document.getElementById('keyword').value);
+    formData.append('min_push_count', document.getElementById('min_push_count').value || '0');
+    formData.append('max_pushes_per_article', document.getElementById('max_pushes_per_article').value || '10');
+    formData.append('min_text_length', document.getElementById('min_text_length').value || '0');
+    formData.append('combine_pushes', document.getElementById('combine_pushes').checked);
+    formData.append('include_pushes', document.getElementById('include_pushes').checked);
+    formData.append('exclude_re_posts', document.getElementById('exclude_re_posts').checked);
+    formData.append('exclude_fw_posts', document.getElementById('exclude_fw_posts').checked);
+    formData.append('exclude_announcements', document.getElementById('exclude_announcements').checked);
+    const titleContains = document.getElementById('title_contains').value.trim();
+    if (titleContains) formData.append('title_contains', titleContains);
+    const textContains = document.getElementById('text_contains').value.trim();
+    if (textContains) formData.append('text_contains', textContains);
+    const dateStart = document.getElementById('date_start').value;
+    if (dateStart) formData.append('date_start', dateStart.replace(/-/g, ''));
+    const dateEnd = document.getElementById('date_end').value;
+    if (dateEnd) formData.append('date_end', dateEnd.replace(/-/g, ''));
+    const limit = document.getElementById('limit').value;
+    if (limit) formData.append('limit', limit);
+
+    try {
+        const resp = await fetch('/api/challenges/import/ptt-movie', { method: 'POST', body: formData });
+        const { data, text } = await readResponseBody(resp);
+        if (resp.ok) {
+            if (data?.import_summary) {
+                alert(`PTT 匯入完成\n\n${formatPttImportSummary(data.import_summary)}`);
+            }
+            window.location.href = `/challenges/${data.uuid}`;
+        } else {
+            errorEl.textContent = buildApiErrorMessage(resp, data ?? text, '匯入失敗');
+            errorEl.classList.remove('hidden');
+            submitBtn.disabled = false;
+            submitBtn.textContent = '匯入';
+        }
+    } catch (err) {
+        errorEl.textContent = buildFetchErrorMessage(err);
+        errorEl.classList.remove('hidden');
+        submitBtn.disabled = false;
+        submitBtn.textContent = '匯入';
+    }
+});
+</script>
+{% endblock %}

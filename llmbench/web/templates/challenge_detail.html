@@ -1,0 +1,1821 @@
+{% extends "base.html" %}
+
+{% block title %}{{ challenge.name }} - LLMBench{% endblock %}
+
+{% block content %}
+<div class="px-4 sm:px-0">
+    <div class="mb-6">
+        <a href="/challenges" class="text-sm text-gray-500 hover:text-gray-700">&larr; Back to Challenges</a>
+        <div class="flex justify-between items-start mt-2">
+            <h2 class="text-2xl font-bold text-gray-900">{{ challenge.name }}</h2>
+            <div class="flex space-x-2">
+                {% if challenge.row_count > 0 %}
+                <button onclick="openGenerateModal()"
+                    class="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700">
+                    &#9654; 生成題目
+                </button>
+                <button onclick="openLeaderboardGenerateModal()"
+                    class="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-amber-600 hover:bg-amber-700">
+                    &#9733; 新增模型
+                </button>
+                {% endif %}
+                <a href="/challenges/{{ challenge.uuid }}/edit"
+                    class="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700">
+                    Edit
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Info Card -->
+    <div class="bg-white shadow rounded-lg p-6 mb-6">
+        <dl class="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            <div>
+                <dt class="text-xs font-medium text-gray-500 uppercase">Task Type</dt>
+                <dd class="mt-1 text-sm text-gray-900">
+                    {% if challenge.task_type %}
+                    <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">{{ challenge.task_type }}</span>
+                    {% else %}-{% endif %}
+                </dd>
+            </div>
+            <div>
+                <dt class="text-xs font-medium text-gray-500 uppercase">Total Rows</dt>
+                <dd class="mt-1 text-sm font-semibold text-gray-900">{{ challenge.row_count }}</dd>
+            </div>
+            <div>
+                <dt class="text-xs font-medium text-gray-500 uppercase">Created</dt>
+                <dd class="mt-1 text-sm text-gray-900">{{ created_at_local }}</dd>
+            </div>
+            <div>
+                <dt class="text-xs font-medium text-gray-500 uppercase">Updated</dt>
+                <dd class="mt-1 text-sm text-gray-900">{{ updated_at_local }}</dd>
+            </div>
+        </dl>
+        {% if challenge.description %}
+        <div class="mt-4 pt-4 border-t border-gray-200">
+            <dt class="text-xs font-medium text-gray-500 uppercase mb-1">Description</dt>
+            <dd class="text-sm text-gray-700 whitespace-pre-wrap">{{ challenge.description }}</dd>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Generating progress banner -->
+    <div id="generatingBanner" class="hidden mb-4 flex items-center justify-between rounded-lg border border-blue-300 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+        <div class="flex items-center gap-2">
+            <svg class="h-4 w-4 animate-spin text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+            </svg>
+            <span id="generatingMsg">生成中，請稍候...</span>
+        </div>
+        <button onclick="cancelGenerateTask()"
+            class="ml-4 rounded border border-blue-400 px-3 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100">
+            取消
+        </button>
+    </div>
+
+    <!-- Generate Modal -->
+    <div id="generateModal" class="hidden fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+            <h3 class="text-lg font-medium text-gray-900 mb-4">生成題目</h3>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">待測模型</label>
+                    <input type="text" id="basic_gen_model" value="gpt-oss-20b"
+                        class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Judge 模型</label>
+                    <input type="text" id="basic_judge_model" value="gpt-4o-mini"
+                        class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">任務類型（逗號分隔）</label>
+                    <input type="text" id="basic_gen_task_types" value="stance_analysis,summarization,sentiment,classification,qa"
+                        class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">題目面向（六邊形維度）</label>
+                    <!-- Aspect checkboxes (non-school_qa) -->
+                    <div id="basicAspectCheckboxes" class="mt-2 grid grid-cols-2 gap-2 text-sm">
+                        <label class="flex items-center rounded border border-gray-200 px-3 py-2">
+                            <input type="checkbox" class="basic-aspect-checkbox h-4 w-4 rounded border-gray-300 text-green-600" value="人文" checked onchange="loadBasicAspectStats()">
+                            <span class="ml-2">人文</span>
+                        </label>
+                        <label class="flex items-center rounded border border-gray-200 px-3 py-2">
+                            <input type="checkbox" class="basic-aspect-checkbox h-4 w-4 rounded border-gray-300 text-green-600" value="歷史" checked onchange="loadBasicAspectStats()">
+                            <span class="ml-2">歷史</span>
+                        </label>
+                        <label class="flex items-center rounded border border-gray-200 px-3 py-2">
+                            <input type="checkbox" class="basic-aspect-checkbox h-4 w-4 rounded border-gray-300 text-green-600" value="政治" checked onchange="loadBasicAspectStats()">
+                            <span class="ml-2">政治</span>
+                        </label>
+                        <label class="flex items-center rounded border border-gray-200 px-3 py-2">
+                            <input type="checkbox" class="basic-aspect-checkbox h-4 w-4 rounded border-gray-300 text-green-600" value="社會" checked onchange="loadBasicAspectStats()">
+                            <span class="ml-2">社會</span>
+                        </label>
+                        <label class="flex items-center rounded border border-gray-200 px-3 py-2">
+                            <input type="checkbox" class="basic-aspect-checkbox h-4 w-4 rounded border-gray-300 text-green-600" value="國際" checked onchange="loadBasicAspectStats()">
+                            <span class="ml-2">國際</span>
+                        </label>
+                        <label class="flex items-center rounded border border-gray-200 px-3 py-2">
+                            <input type="checkbox" class="basic-aspect-checkbox h-4 w-4 rounded border-gray-300 text-green-600" value="科技" checked onchange="loadBasicAspectStats()">
+                            <span class="ml-2">科技</span>
+                        </label>
+                    </div>
+                    <!-- Subject checkboxes (school_qa) -->
+                    <div id="basicSubjectCheckboxes" class="mt-2 grid grid-cols-2 gap-2 text-sm hidden">
+                        {% for subj in ["國文", "英語", "數學", "自然", "社會", "理化", "生物", "歷史", "地理", "公民"] %}
+                        <label class="flex items-center rounded border border-gray-200 px-3 py-2">
+                            <input type="checkbox" class="basic-subject-checkbox h-4 w-4 rounded border-gray-300 text-green-600" value="{{ subj }}" checked onchange="loadBasicAspectStats()">
+                            <span class="ml-2">{{ subj }}</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+                <div id="basicAspectStats" class="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
+                    正在計算分布…
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">抽取篇數</label>
+                    <input type="number" id="basic_gen_items" value="5" min="1"
+                        class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm">
+                    <p id="basic_gen_items_hint" class="mt-1 text-xs text-gray-400"></p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">每篇文章題數 <span class="text-gray-400 font-normal text-xs">（true_false 專用）</span></label>
+                    <input type="number" id="basic_gen_questions_per_article" value="10" min="1" max="20"
+                        class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm">
+                </div>
+                <div id="basic_gen_error" class="hidden text-sm text-red-600 bg-red-50 rounded p-3"></div>
+            </div>
+            <div class="mt-6 flex justify-end space-x-3">
+                <button onclick="closeGenerateModal()"
+                    class="px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+                    取消
+                </button>
+                <button onclick="runBasicGenerate()" id="basic_gen_btn"
+                    class="px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 disabled:opacity-50">
+                    執行
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="leaderboardGenerateModal" class="hidden fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md">
+            <h3 class="text-lg font-medium text-gray-900 mb-4">新增模型 / 受試者</h3>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">新增對象</label>
+                    <select id="leaderboard_target" onchange="toggleAdvancedEntryFields()"
+                        class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm">
+                        <option value="model">模型</option>
+                        <option value="participant">受試者</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">新增模型</label>
+                    <input type="text" id="gen_model" value="gpt-oss-20b"
+                        class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm">
+                </div>
+                <div class="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600">
+                    Judge 模型沿用目前排行榜設定：<span id="currentJudgeModel" class="font-medium text-gray-800">gpt-4o-mini</span>
+                </div>
+                <div id="advancedModelFields" class="rounded-lg border border-gray-200 bg-gray-50 p-3 space-y-3">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">模型 API</label>
+                        <input type="text" id="model_api_base_url" placeholder="https://your-api.example.com/v1"
+                            class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm">
+                        <p class="mt-1 text-xs text-gray-500">新增模型到 leaderboard 時可指定 API。未填時使用系統預設 LiteLLM API。</p>
+                    </div>
+                </div>
+                <div id="advancedParticipantFields" class="hidden rounded-lg border border-indigo-200 bg-indigo-50 p-3 space-y-3">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Leaderboard 排名對象</label>
+                        <div class="mt-1 rounded-md border border-indigo-200 bg-white px-3 py-2 text-sm text-indigo-700">受試者</div>
+                    </div>
+                    <p class="text-xs text-indigo-700">受試者模式只需上傳已填寫完成的答案檔，系統會自動評分並加入排行榜。</p>
+                    <label class="inline-flex items-center justify-center px-3 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 cursor-pointer">
+                        &#8593; 上傳受試者答案
+                        <input type="file" id="uploadAnswersInput" accept=".csv,.xlsx" class="hidden" onchange="uploadAnswers(this)">
+                    </label>
+                </div>
+                <div id="testAllToggleField" class="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                    <label class="flex items-start gap-2 cursor-pointer">
+                        <input type="checkbox" id="testAllExisting" class="mt-0.5 h-4 w-4 rounded border-gray-300 text-emerald-600"
+                            onchange="toggleTestAllMode()">
+                        <div>
+                            <span class="text-sm font-medium text-gray-900">用所有現有題目測試此模型</span>
+                            <p class="text-xs text-gray-500 mt-0.5">勾選後直接拿目前題庫所有 unique 題目跑此模型，不重新抽樣。</p>
+                        </div>
+                    </label>
+                </div>
+                <div id="participantSamplingFields" class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">抽樣題數</label>
+                        <input type="number" id="leaderboard_sample_size" value="10" min="1" max="100"
+                            class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm">
+                        <p class="mt-1 text-xs text-gray-500">1 到 100 題</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">抽樣範圍</label>
+                        <select id="leaderboard_sample_scope"
+                            class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm">
+                            <option value="overall">整個題目</option>
+                            <option value="per_aspect">每個面向</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="gen_error" class="hidden text-sm text-red-600 bg-red-50 rounded p-3"></div>
+                <div id="gen_summary" class="hidden text-sm text-green-700 bg-green-50 rounded p-3"></div>
+                <div id="gen_table" class="hidden overflow-x-auto max-h-64 overflow-y-auto"></div>
+            </div>
+            <div class="mt-6 flex justify-end space-x-3">
+                <button onclick="closeLeaderboardGenerateModal()"
+                    class="px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+                    取消
+                </button>
+                <button onclick="runGenerate()" id="gen_btn"
+                    class="px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 disabled:opacity-50">
+                    執行
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="aspectModal" class="hidden fixed inset-0 bg-slate-900/55 flex items-center justify-center z-50">
+        <div class="bg-white rounded-xl shadow-2xl p-6 w-full max-w-2xl">
+            <div class="flex items-start justify-between mb-4">
+                <div>
+                    <h3 id="aspectModalTitle" class="text-lg font-semibold text-slate-900">{{ '科目強度' if challenge.task_type == 'school_qa' else '面向強度' }}</h3>
+                    <p id="aspectModalSubtitle" class="mt-1 text-sm text-slate-500"></p>
+                </div>
+                <button onclick="closeAspectModal()" class="text-sm text-slate-500 hover:text-slate-700">關閉</button>
+            </div>
+            <div class="grid gap-6 md:grid-cols-[320px,1fr]">
+                <div id="aspectChart" class="rounded-xl border border-amber-200 bg-amber-50 p-4"></div>
+                <div>
+                    <div id="aspectLegend" class="grid grid-cols-2 gap-3"></div>
+                    <p class="mt-4 text-xs text-slate-500">分數以 5 分為滿分；星形越外側代表該面向表現越強。</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Data Preview + Generated Results (tabbed) -->
+    <div class="bg-white shadow rounded-lg p-6">
+        <!-- Tab headers -->
+        <div class="flex items-center justify-between mb-4">
+            <div class="flex space-x-1 border-b border-gray-200 w-full">
+                <button id="tab-preview" onclick="switchTab('preview')"
+                    class="px-4 py-2 text-sm font-medium border-b-2 border-indigo-500 text-indigo-600 -mb-px">
+                    來源資料
+                </button>
+                <button id="tab-results" onclick="switchTab('results')"
+                    class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 -mb-px">
+                    生成題目 <span id="resultsCount" class="ml-1 text-xs text-gray-400"></span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Tab: 來源資料 -->
+        <div id="pane-preview">
+            <div class="flex justify-end mb-3">
+                <div class="flex items-center space-x-2">
+                    <label class="text-sm text-gray-600">Show rows:</label>
+                    <select id="previewN" onchange="loadPreview()" class="text-sm border-gray-300 rounded border px-2 py-1">
+                        <option value="5">5</option>
+                        <option value="10">10</option>
+                        <option value="20">20</option>
+                        <option value="50">50</option>
+                    </select>
+                </div>
+            </div>
+            {% if challenge.row_count == 0 %}
+            <p class="text-sm text-gray-500 text-center py-8">No data. <a href="/challenges/{{ challenge.uuid }}/edit" class="text-indigo-600 hover:text-indigo-900">Upload a JSONL file</a>.</p>
+            {% else %}
+            <div id="previewTable" class="overflow-x-auto">
+                <p class="text-sm text-gray-400">Loading...</p>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Tab: 生成題目 -->
+        <div id="pane-results" class="hidden">
+            <!-- Actions -->
+            <div id="resultsActions" class="hidden flex items-center justify-between gap-4 mb-3">
+                <span class="text-sm text-gray-500">下載題目後可於新增模型 / 受試者中上傳答案加入混合排行榜</span>
+                <div class="flex items-end gap-3">
+                    <label class="block">
+                        <span class="block text-xs font-medium text-gray-600 mb-1">排序</span>
+                        <select id="resultsSort" onchange="applyResultsSort()"
+                            class="rounded-md border border-gray-300 px-3 py-1.5 text-sm">
+                            <option value="default">預設</option>
+                            <option value="latest">最新優先</option>
+                            <option value="oldest">最舊優先</option>
+                            <option value="title">標題 A→Z</option>
+                            <option value="title_desc">標題 Z→A</option>
+                            <option value="score_desc">得分高→低</option>
+                            <option value="score_asc">得分低→高</option>
+                            <option value="model">模型名稱</option>
+                            <option value="aspect">面向</option>
+                        </select>
+                    </label>
+                    <label class="block">
+                        <span class="block text-xs font-medium text-gray-600 mb-1">下載題數</span>
+                        <input type="number" id="download_sample_size" value="20" min="1" max="100"
+                            class="w-24 rounded-md border border-gray-300 px-3 py-1.5 text-sm">
+                    </label>
+                    <a id="downloadQuestionsBtn" href="#"
+                        class="inline-flex items-center px-3 py-1.5 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+                        &#8595; 下載受試者題目
+                    </a>
+                    <button onclick="openSelectQModal()"
+                        class="inline-flex items-center px-3 py-1.5 border border-indigo-300 text-sm font-medium rounded-md text-indigo-700 bg-white hover:bg-indigo-50">
+                        &#9745; 選題下載
+                    </button>
+                    <a id="exportGoogleFormBtn" href="#"
+                        class="hidden inline-flex items-center px-3 py-1.5 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+                        &#8625; Google 表單腳本
+                    </a>
+                    <button onclick="openPValuesModal()"
+                        class="inline-flex items-center px-3 py-1.5 border border-purple-300 text-sm font-medium rounded-md text-purple-700 bg-white hover:bg-purple-50">
+                        &#128202; P 值分析
+                    </button>
+                </div>
+            </div>
+            <div id="resultsSummary" class="hidden mb-3 text-sm text-green-700 bg-green-50 rounded p-3"></div>
+            <div id="leaderboardSummary" class="hidden mb-3"></div>
+            <div id="resultsTable" class="overflow-x-auto"></div>
+            <p id="resultsEmpty" class="hidden text-sm text-gray-500 text-center py-8">尚未生成題目。</p>
+
+            <!-- Human scoring results -->
+            <div id="humanScoringSection" class="hidden mt-6 border-t border-gray-200 pt-4">
+                <h3 class="text-sm font-semibold text-gray-700 mb-3">受試者答案評分結果</h3>
+                <div id="humanSummary" class="mb-3 text-sm text-gray-600"></div>
+                <div id="humanTable" class="overflow-x-auto"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- P 值分析 Modal -->
+<div id="pvaluesModal" class="hidden fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50">
+    <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-3xl max-h-[80vh] flex flex-col">
+        <div class="flex items-center justify-between mb-3">
+            <div>
+                <h3 class="text-lg font-medium text-gray-900">P 值分析（題目難度）</h3>
+                <p id="pvaluesMeta" class="mt-1 text-xs text-gray-500"></p>
+            </div>
+            <button onclick="closePValuesModal()" class="text-sm text-gray-500 hover:text-gray-700">關閉</button>
+        </div>
+        <!-- Filter buttons -->
+        <div class="mb-3 flex flex-wrap gap-2 text-xs">
+            <button id="pv-filter-all"    onclick="setPvFilter('all')"    class="pv-filter-btn px-3 py-1 rounded-full border border-gray-300 text-gray-700 bg-gray-100 font-medium">全部</button>
+            <button id="pv-filter-ideal"  onclick="setPvFilter('ideal')"  class="pv-filter-btn px-3 py-1 rounded-full border border-green-300 text-green-700">&#9679; 理想（0.4–0.7）</button>
+            <button id="pv-filter-easy"   onclick="setPvFilter('easy')"   class="pv-filter-btn px-3 py-1 rounded-full border border-red-300 text-red-600">&#9679; 太簡單（&gt;0.7）</button>
+            <button id="pv-filter-hard"   onclick="setPvFilter('hard')"   class="pv-filter-btn px-3 py-1 rounded-full border border-orange-300 text-orange-600">&#9679; 太難（&lt;0.4）</button>
+        </div>
+        <div id="pvaluesBody" class="overflow-y-auto flex-1 text-sm">
+            <p class="text-gray-400 text-center py-8">載入中…</p>
+        </div>
+        <!-- Download filtered -->
+        <div class="mt-3 flex items-center justify-between border-t border-gray-200 pt-3">
+            <span id="pvaluesDownloadInfo" class="text-xs text-gray-500"></span>
+            <a id="pvaluesDownloadBtn" href="#" target="_blank"
+                class="inline-flex items-center px-4 py-2 border border-purple-300 text-sm font-medium rounded-md text-purple-700 bg-white hover:bg-purple-50">
+                &#8595; 下載篩選題目
+            </a>
+        </div>
+    </div>
+</div>
+<!-- 選題 Modal -->
+<div id="selectQModal" class="hidden fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50">
+    <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-3xl max-h-[85vh] flex flex-col">
+        <div class="flex items-center justify-between mb-3">
+            <h3 class="text-lg font-medium text-gray-900">選擇題目</h3>
+            <button onclick="closeSelectQModal()" class="text-sm text-gray-500 hover:text-gray-700">關閉</button>
+        </div>
+        <!-- 快速配比 -->
+        <div class="mb-3 rounded-lg border border-indigo-200 bg-indigo-50 p-3">
+            <div class="flex flex-wrap items-center gap-3 text-xs">
+                <span class="font-medium text-indigo-800">快速配比</span>
+                <label class="flex items-center gap-1 text-green-700">
+                    <span>理想</span>
+                    <input id="sqMixIdeal" type="number" value="10" min="0" class="w-14 border border-green-300 rounded px-1.5 py-0.5 text-center">
+                </label>
+                <label class="flex items-center gap-1 text-red-600">
+                    <span>太簡單</span>
+                    <input id="sqMixEasy" type="number" value="5" min="0" class="w-14 border border-red-300 rounded px-1.5 py-0.5 text-center">
+                </label>
+                <label class="flex items-center gap-1 text-orange-600">
+                    <span>太難</span>
+                    <input id="sqMixHard" type="number" value="5" min="0" class="w-14 border border-orange-300 rounded px-1.5 py-0.5 text-center">
+                </label>
+                <label class="flex items-center gap-1.5 text-indigo-700 border-l border-indigo-300 pl-3">
+                    <input type="checkbox" id="sqBalanceAspect" checked class="h-3.5 w-3.5 rounded border-indigo-300 text-indigo-600">
+                    <span>平均分配六面向</span>
+                </label>
+                <button onclick="applyMix()"
+                    class="px-3 py-1 rounded-full border border-indigo-400 text-indigo-700 bg-white hover:bg-indigo-100 font-medium">
+                    隨機抽樣
+                </button>
+                <span id="sqMixMsg" class="text-indigo-600"></span>
+            </div>
+        </div>
+        <div class="flex flex-wrap items-center gap-2 mb-3 text-xs">
+            <button onclick="selectQAll(true)"  class="px-3 py-1 rounded-full border border-gray-300 text-gray-700 hover:bg-gray-100">全選</button>
+            <button onclick="selectQAll(false)" class="px-3 py-1 rounded-full border border-gray-300 text-gray-700 hover:bg-gray-100">取消全選</button>
+            <input id="selectQSearch" type="text" placeholder="搜尋陳述句…"
+                oninput="renderSelectQTable()"
+                class="ml-auto border border-gray-300 rounded px-2 py-1 text-xs w-48 focus:border-indigo-400 focus:outline-none">
+        </div>
+        <div id="selectQBody" class="overflow-y-auto flex-1 text-sm border border-gray-200 rounded">
+            <p class="text-gray-400 text-center py-8">載入中…</p>
+        </div>
+        <div class="mt-3 flex items-center justify-between border-t border-gray-200 pt-3">
+            <span id="selectQCount" class="text-xs text-gray-500">已選 0 題</span>
+            <div class="flex gap-2">
+                <button onclick="downloadSelectQGoogleForm()" id="selectQGFormBtn"
+                    class="hidden inline-flex items-center px-3 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50">
+                    &#8625; Google 表單腳本
+                </button>
+                <button onclick="downloadSelectQ()" id="selectQDownloadBtn"
+                    class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50">
+                    &#8595; 下載選取題目
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const challengeUuid = '{{ challenge.uuid }}';
+const rowCount = {{ challenge.row_count }};
+const challengeTaskType = '{{ challenge.task_type or "" }}';
+const DEFAULT_ASPECTS = ['人文', '歷史', '政治', '社會', '國際', '科技'];
+let latestLeaderboardRows = [];
+let baseLeaderboardRows = [];
+let latestAspectLabels = [...DEFAULT_ASPECTS];
+let currentJudgeModelName = 'gpt-4o-mini';
+let currentParticipantSampleSize = 10;
+
+function getParticipantSampleSize() {
+    const preferred = document.getElementById('download_sample_size');
+    const fallback = document.getElementById('leaderboard_sample_size');
+    const raw = Number(preferred?.value || fallback?.value || currentParticipantSampleSize || 10);
+    return Math.max(1, Math.min(raw || 10, 100));
+}
+
+function syncParticipantSampleSize(value) {
+    const normalized = Math.max(1, Math.min(Number(value || 10), 100));
+    currentParticipantSampleSize = normalized;
+
+    const preferred = document.getElementById('download_sample_size');
+    if (preferred) preferred.value = normalized;
+
+    const fallback = document.getElementById('leaderboard_sample_size');
+    if (fallback) fallback.value = normalized;
+
+    const downloadBtn = document.getElementById('downloadQuestionsBtn');
+    if (downloadBtn) {
+        downloadBtn.href = `/api/challenges/${challengeUuid}/export-questions?sample_size=${normalized}`;
+    }
+
+    const googleFormBtn = document.getElementById('exportGoogleFormBtn');
+    if (googleFormBtn && challengeTaskType === 'true_false') {
+        googleFormBtn.classList.remove('hidden');
+        googleFormBtn.href = `/api/challenges/${challengeUuid}/export/google-form-script?sample_size=${normalized}`;
+    }
+}
+
+async function loadPreview() {
+    if (rowCount === 0) return;
+    const n = document.getElementById('previewN').value;
+    const resp = await fetch(`/api/challenges/${challengeUuid}/preview?n=${n}`);
+    const data = await resp.json();
+
+    if (!data.rows || data.rows.length === 0) {
+        document.getElementById('previewTable').innerHTML = '<p class="text-sm text-gray-500">No data available.</p>';
+        return;
+    }
+
+    // Collect all keys
+    const keys = [...new Set(data.rows.flatMap(r => Object.keys(r)))];
+
+    let html = `<p class="text-xs text-gray-500 mb-2">Showing ${data.rows.length} of ${data.total_rows} rows</p>`;
+    html += '<table class="min-w-full text-sm divide-y divide-gray-200 border border-gray-200 rounded">';
+    html += '<thead class="bg-gray-50"><tr>';
+    html += '<th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">#</th>';
+    keys.forEach(k => {
+        html += `<th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">${k}</th>`;
+    });
+    html += '</tr></thead><tbody class="divide-y divide-gray-200">';
+
+    data.rows.forEach((row, i) => {
+        html += '<tr>';
+        html += `<td class="px-3 py-2 text-gray-400 text-xs">${i + 1}</td>`;
+        keys.forEach(k => {
+            const val = row[k] !== undefined ? String(row[k]) : '';
+            const display = val.length > 120 ? val.slice(0, 120) + '...' : val;
+            html += `<td class="px-3 py-2 text-gray-700 max-w-xs truncate" title="${val.replace(/"/g, '&quot;')}">${display}</td>`;
+        });
+        html += '</tr>';
+    });
+
+    html += '</tbody></table>';
+    document.getElementById('previewTable').innerHTML = html;
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    if (rowCount > 0) loadPreview();
+    loadResults();
+});
+
+function switchTab(tab) {
+    const isPreview = tab === 'preview';
+    document.getElementById('pane-preview').classList.toggle('hidden', !isPreview);
+    document.getElementById('pane-results').classList.toggle('hidden', isPreview);
+    document.getElementById('tab-preview').className = isPreview
+        ? 'px-4 py-2 text-sm font-medium border-b-2 border-indigo-500 text-indigo-600 -mb-px'
+        : 'px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 -mb-px';
+    document.getElementById('tab-results').className = isPreview
+        ? 'px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 -mb-px'
+        : 'px-4 py-2 text-sm font-medium border-b-2 border-indigo-500 text-indigo-600 -mb-px';
+}
+
+async function loadResults() {
+    const resp = await fetch(`/api/challenges/${challengeUuid}/results`);
+    const data = await resp.json();
+    const summaryEl = document.getElementById('resultsSummary');
+    const leaderboardEl = document.getElementById('leaderboardSummary');
+    if (data.items && data.items.length > 0) {
+        const avg = data.avg_score == null ? '-' : Number(data.avg_score).toFixed(3);
+        const passLabel = data.pass == null
+            ? '<span class="text-gray-600 font-semibold">-</span>'
+            : (data.pass
+                ? '<span class="text-green-700 font-semibold">PASS ✓</span>'
+                : '<span class="text-red-600 font-semibold">FAIL ✗</span>');
+        const reasonLabels = {
+            invalid_topic: '主題不合格',
+            unsupported_stance: '非支持反對',
+            no_replies: '無留言',
+            unsupported_language: '非中英文'
+        };
+        const reasonText = Object.entries(data.filtered_reasons || {})
+            .filter(([, count]) => Number(count) > 0)
+            .map(([key, count]) => `${reasonLabels[key] || key} ${count}`)
+            .join('、');
+        const filtered = Number(data.filtered_items || 0);
+        const filteredText = reasonText ? `<b>${filtered}</b>（${reasonText}）` : `<b>${filtered}</b>`;
+        const dedupCount = Number(data.run_dedup_count || 0);
+        const dedupText = dedupCount > 0 ? `，去重：<b>${dedupCount}</b>` : '';
+        const testedModels = (data.tested_models || []).length;
+        const judgeModel = data.judge_model_name || '-';
+        currentJudgeModelName = judgeModel;
+        const currentJudgeEl = document.getElementById('currentJudgeModel');
+        if (currentJudgeEl) currentJudgeEl.textContent = judgeModel;
+        const selectedAspects = (data.selected_aspects || DEFAULT_ASPECTS).join(' / ');
+        syncParticipantSampleSize(data.source_items || data.leaderboard_sample_size || currentParticipantSampleSize || 10);
+        summaryEl.innerHTML = `完成！來源題目：<b>${data.source_items || data.total_items}</b>，模型結果列：<b>${data.total_items}</b>，被過濾：${filteredText}${dedupText}，平均分：<b>${avg}</b>，Judge：<b>${escapeHtml(judgeModel)}</b>，模型數：<b>${testedModels}</b>，面向：<b>${escapeHtml(selectedAspects)}</b>，驗收：${passLabel}`;
+        summaryEl.classList.remove('hidden');
+        baseLeaderboardRows = data.leaderboard || [];
+        renderLeaderboard(baseLeaderboardRows, judgeModel, data.aspect_labels || DEFAULT_ASPECTS);
+        leaderboardEl.classList.remove('hidden');
+        renderResultsTable(data.items);
+    } else {
+        summaryEl.classList.add('hidden');
+        leaderboardEl.classList.add('hidden');
+        document.getElementById('resultsEmpty').classList.remove('hidden');
+    }
+}
+
+function renderLeaderboard(rows, judgeModelName, aspectLabels) {
+    const el = document.getElementById('leaderboardSummary');
+    if (!rows || rows.length === 0) {
+        el.classList.add('hidden');
+        el.innerHTML = '';
+        return;
+    }
+    latestLeaderboardRows = rows;
+    latestAspectLabels = (aspectLabels && aspectLabels.length) ? aspectLabels : [...DEFAULT_ASPECTS];
+
+    let html = '<div class="bg-amber-50 border border-amber-200 rounded-lg p-4">';
+    html += `<div class="flex items-center justify-between mb-1"><h3 class="text-sm font-semibold text-amber-900">混合排行榜</h3><span class="text-xs text-amber-700">Judge: ${escapeHtml(judgeModelName || '-')}</span></div>`;
+    html += '<p class="mb-3 text-xs text-amber-800">同時顯示模型與受試者成績，依平均分混合排序。</p>';
+    html += '<div class="overflow-x-auto"><table class="min-w-full text-xs divide-y divide-amber-200">';
+    html += '<thead><tr class="text-left text-amber-800">';
+    html += '<th class="px-2 py-2 font-medium">Rank</th>';
+    html += '<th class="px-2 py-2 font-medium">Type</th>';
+    html += '<th class="px-2 py-2 font-medium">Model</th>';
+    html += '<th class="px-2 py-2 font-medium text-right">Avg Score</th>';
+    html += '<th class="px-2 py-2 font-medium text-right">Count</th>';
+    html += '<th class="px-2 py-2 font-medium text-right">Avg Latency</th>';
+    html += '<th class="px-2 py-2 font-medium text-right">Errors</th>';
+    html += '<th class="px-2 py-2 font-medium text-right">面向</th>';
+    html += '</tr></thead><tbody class="divide-y divide-amber-100">';
+    rows.forEach((row, index) => {
+        html += '<tr>';
+        html += `<td class="px-2 py-2 font-semibold text-amber-900">#${row.rank}</td>`;
+        html += `<td class="px-2 py-2 text-gray-700">${row.entity_type === 'participant' ? '受試者' : '模型'}</td>`;
+        html += `<td class="px-2 py-2 text-gray-800">${escapeHtml(row.display_name || row.model_name)}</td>`;
+        html += `<td class="px-2 py-2 text-right text-gray-800">${row.avg_score == null ? '-' : Number(row.avg_score).toFixed(3)}</td>`;
+        html += `<td class="px-2 py-2 text-right text-gray-700">${row.count ?? '-'}</td>`;
+        html += `<td class="px-2 py-2 text-right text-gray-700">${row.avg_latency_ms == null ? '-' : Number(row.avg_latency_ms).toFixed(1)} ms</td>`;
+        html += `<td class="px-2 py-2 text-right ${row.error_count ? 'text-red-600' : 'text-gray-700'}">${row.error_count ?? 0}</td>`;
+        html += `<td class="px-2 py-2 text-right"><button type="button" onclick="openAspectModal(${index})" class="inline-flex items-center rounded-full border border-amber-300 px-2.5 py-1 text-[11px] font-medium text-amber-900 hover:bg-amber-100">六邊形</button></td>`;
+        html += '</tr>';
+    });
+    html += '</tbody></table></div></div>';
+    el.innerHTML = html;
+}
+
+function mergeLeaderboardRows(modelRows, participantRows) {
+    const combined = [...(modelRows || []), ...(participantRows || [])].map((row) => ({ ...row }));
+    combined.sort((a, b) => {
+        const aScore = a.avg_score == null ? -1 : Number(a.avg_score);
+        const bScore = b.avg_score == null ? -1 : Number(b.avg_score);
+        if (bScore !== aScore) return bScore - aScore;
+        const aErr = Number(a.error_count || 0);
+        const bErr = Number(b.error_count || 0);
+        if (aErr !== bErr) return aErr - bErr;
+        return String(a.display_name || a.model_name || '').localeCompare(String(b.display_name || b.model_name || ''));
+    });
+    return combined.map((row, idx) => ({ ...row, rank: idx + 1 }));
+}
+
+function getSelectedAspects() {
+    return Array.from(document.querySelectorAll('.aspect-checkbox:checked')).map((el) => el.value);
+}
+
+function getBasicSelectedAspects() {
+    return Array.from(document.querySelectorAll('.basic-aspect-checkbox:checked')).map((el) => el.value);
+}
+
+async function loadBasicAspectStats() {
+    const statsEl = document.getElementById('basicAspectStats');
+    if (!statsEl) return;
+    const selected = getBasicSelectedAspects();
+    if (selected.length === 0) {
+        statsEl.innerHTML = `<span class="text-red-600">請至少選擇一個面向。</span>`;
+        return;
+    }
+
+    statsEl.textContent = `正在計算面向分布…`;
+    try {
+        const params = new URLSearchParams({ aspects: selected.join(',') });
+        const resp = await fetch(`/api/challenges/${challengeUuid}/aspect-stats?${params.toString()}`);
+        const data = await resp.json();
+        if (!resp.ok) {
+            statsEl.innerHTML = `<span class="text-red-600">${escapeHtml(data.detail || '無法取得面向統計')}</span>`;
+            return;
+        }
+        const matched = data.matched_rows ?? 0;
+        const lines = (data.selected_aspects || DEFAULT_ASPECTS).map((label) => {
+            const count = (data.aspect_counts || {})[label] ?? 0;
+            return `<div class="flex items-center justify-between rounded bg-white/70 px-3 py-1.5"><span>${escapeHtml(label)}</span><span class="font-semibold">${count} 筆</span></div>`;
+        }).join('');
+        statsEl.innerHTML = `
+            <div class="mb-2 flex items-center justify-between text-xs text-emerald-800">
+                <span>來源總筆數：${data.total_rows ?? 0}</span>
+                <span>符合選取面向：${matched}</span>
+            </div>
+            <div class="grid grid-cols-2 gap-2">${lines}</div>
+        `;
+        // Update max on 抽取篇數 input
+        const itemsInput = document.getElementById('basic_gen_items');
+        if (itemsInput && matched > 0) {
+            itemsInput.max = matched;
+            const hint = document.getElementById('basic_gen_items_hint');
+            if (hint) hint.textContent = `最多 ${matched} 篇`;
+        }
+    } catch (err) {
+        statsEl.innerHTML = `<span class="text-red-600">取得統計失敗：${escapeHtml(err.message || String(err))}</span>`;
+    }
+}
+
+function closeAspectModal() {
+    document.getElementById('aspectModal').classList.add('hidden');
+}
+
+function openAspectModal(index) {
+    const row = latestLeaderboardRows[index];
+    if (!row) return;
+    const labels = latestAspectLabels.length ? latestAspectLabels : [...DEFAULT_ASPECTS];
+    const scores = row.aspect_scores || {};
+    const counts = row.aspect_counts || {};
+    document.getElementById('aspectModalTitle').textContent = `${row.model_name} 面向強度`;
+    document.getElementById('aspectModalSubtitle').textContent = `平均分 ${row.avg_score == null ? '-' : Number(row.avg_score).toFixed(3)}，Judge ${document.querySelector('#leaderboardSummary .text-amber-700')?.textContent?.replace('Judge: ', '') || '-'}`;
+    document.getElementById('aspectChart').innerHTML = buildAspectChart(labels, scores);
+    document.getElementById('aspectLegend').innerHTML = labels.map((label) => {
+        const value = scores[label];
+        const count = counts[label] ?? 0;
+        return `
+            <div class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                <div class="text-xs font-medium text-slate-500">${escapeHtml(label)}</div>
+                <div class="mt-1 text-lg font-semibold text-slate-900">${value == null ? '-' : Number(value).toFixed(2)}</div>
+                <div class="text-xs text-slate-500">${count} 題</div>
+            </div>
+        `;
+    }).join('');
+    document.getElementById('aspectModal').classList.remove('hidden');
+}
+
+function buildAspectChart(labels, scores) {
+    const size = 280;
+    const center = size / 2;
+    const radius = 92;
+    const rings = 5;
+    const pointsFor = (scale) => labels.map((label, index) => {
+        const angle = (-Math.PI / 2) + (Math.PI * 2 * index / labels.length);
+        const value = Math.max(0, Math.min(5, Number(scores[label] ?? 0)));
+        const r = radius * scale * (value / 5);
+        return [center + Math.cos(angle) * r, center + Math.sin(angle) * r];
+    });
+    const ringPoints = (scale) => labels.map((_, index) => {
+        const angle = (-Math.PI / 2) + (Math.PI * 2 * index / labels.length);
+        return `${center + Math.cos(angle) * radius * scale},${center + Math.sin(angle) * radius * scale}`;
+    }).join(' ');
+    const dataPoints = pointsFor(1).map(([x, y]) => `${x},${y}`).join(' ');
+    const axes = labels.map((label, index) => {
+        const angle = (-Math.PI / 2) + (Math.PI * 2 * index / labels.length);
+        const x = center + Math.cos(angle) * radius;
+        const y = center + Math.sin(angle) * radius;
+        const lx = center + Math.cos(angle) * (radius + 22);
+        const ly = center + Math.sin(angle) * (radius + 22);
+        return `
+            <line x1="${center}" y1="${center}" x2="${x}" y2="${y}" stroke="#cbd5e1" stroke-width="1" />
+            <text x="${lx}" y="${ly}" text-anchor="middle" dominant-baseline="middle" font-size="12" fill="#334155">${label}</text>
+        `;
+    }).join('');
+    const dots = pointsFor(1).map(([x, y]) => `<circle cx="${x}" cy="${y}" r="3.5" fill="#d97706" stroke="#fff7ed" stroke-width="1.5" />`).join('');
+    const grid = Array.from({ length: rings }, (_, idx) => {
+        const scale = (idx + 1) / rings;
+        return `<polygon points="${ringPoints(scale)}" fill="none" stroke="${idx === rings - 1 ? '#f59e0b' : '#fcd34d'}" stroke-width="${idx === rings - 1 ? 1.2 : 1}" opacity="${idx === rings - 1 ? 0.65 : 0.45}" />`;
+    }).join('');
+    return `
+        <svg viewBox="0 0 ${size} ${size}" class="w-full h-auto">
+            <defs>
+                <linearGradient id="aspectFill" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="#f59e0b" stop-opacity="0.45"></stop>
+                    <stop offset="100%" stop-color="#b45309" stop-opacity="0.18"></stop>
+                </linearGradient>
+            </defs>
+            ${grid}
+            ${axes}
+            <polygon points="${dataPoints}" fill="url(#aspectFill)" stroke="#b45309" stroke-width="2.5" />
+            ${dots}
+            <circle cx="${center}" cy="${center}" r="2.5" fill="#92400e" />
+        </svg>
+    `;
+}
+
+function renderRequestMessages(messages) {
+    if (!messages || messages.length === 0) return '';
+    return messages.map((msg, index) => {
+        const role = msg.role || `message_${index + 1}`;
+        return `<div class="mb-2 rounded border border-slate-200 bg-slate-50 p-2">
+            <div class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">${escapeHtml(role)}</div>
+            <pre class="mt-1 whitespace-pre-wrap text-gray-700">${escapeHtmlNl(msg.content || '')}</pre>
+        </div>`;
+    }).join('');
+}
+
+function qaTypeLabel(t) {
+    return t === 'factual' ? '事實型' : t === 'inferential' ? '推論型' : t === 'analytical' ? '分析型' : (t || '');
+}
+
+function renderRefAnswer(row) {
+    if (!row.reference_answer) return '';
+    let refHtml = '';
+    try {
+        const raw = JSON.parse(row.reference_answer);
+
+        // School QA format: {type, question, answer, choices?, explanation?}
+        if (row.task_type === 'school_qa' && raw.answer !== undefined) {
+            const qType = raw.type || '';
+            refHtml = `<div class="mt-1 border border-indigo-100 rounded p-2 bg-white text-gray-700 space-y-1">`;
+            if (qType) refHtml += `<div class="text-xs text-gray-400">[${escapeHtml(qType)}]</div>`;
+            if (qType === '選擇題' && raw.choices && typeof raw.choices === 'object') {
+                refHtml += `<div class="space-y-0.5">`;
+                for (const [k, v] of Object.entries(raw.choices).sort()) {
+                    const isCorrect = k === raw.answer;
+                    refHtml += `<div class="${isCorrect ? 'font-semibold text-green-700' : 'text-gray-600'}">${escapeHtml(k)}. ${escapeHtml(v || '')}${isCorrect ? ' ✓' : ''}</div>`;
+                }
+                refHtml += `</div>`;
+            }
+            refHtml += `<div class="font-medium text-green-700">答：${escapeHtml(String(raw.answer))}</div>`;
+            if (raw.explanation) refHtml += `<div class="text-gray-500 text-xs mt-1">解析：${escapeHtml(raw.explanation)}</div>`;
+            refHtml += `</div>`;
+            return refHtml;
+        }
+
+        // Single QA pair: {question, answer, type}
+        if (raw.question && raw.answer) {
+            const typeLabel = qaTypeLabel(raw.type);
+            refHtml = `<div class="mt-1 border border-indigo-100 rounded p-2 bg-white text-gray-700">`;
+            refHtml += `<div class="font-medium text-indigo-700">問：${escapeHtml(raw.question)}${typeLabel ? ` <span class="text-xs text-gray-400 font-normal">[${typeLabel}]</span>` : ''}</div>`;
+            refHtml += `<div class="mt-1.5 text-gray-800 leading-relaxed">答：${escapeHtml(raw.answer)}</div>`;
+            refHtml += `</div>`;
+            return refHtml;
+        }
+
+        // QA list format: {qa_pairs: [{question, answer, type}, ...]}
+        const qaPairs = raw.qa_pairs || (raw.reference_answer && raw.reference_answer.qa_pairs);
+        if (qaPairs && qaPairs.length > 0) {
+            refHtml = `<div class="mt-1 space-y-2 text-gray-700">`;
+            qaPairs.forEach((qa, qi) => {
+                const typeLabel = qaTypeLabel(qa.type);
+                refHtml += `<div class="border border-indigo-100 rounded p-2 bg-white">`;
+                refHtml += `<div class="font-medium text-indigo-700">Q${qi + 1}${typeLabel ? ` <span class="text-xs text-gray-400 font-normal">[${typeLabel}]</span>` : ''}：${escapeHtml(qa.question || '')}</div>`;
+                refHtml += `<div class="mt-1 text-gray-800 leading-relaxed">A：${escapeHtml(qa.answer || '')}</div>`;
+                refHtml += `</div>`;
+            });
+            refHtml += `</div>`;
+            return refHtml;
+        }
+
+        // Stance analysis format: {topic, stance, evidence}
+        const inner = (raw.reference_answer && typeof raw.reference_answer === 'object') ? raw.reference_answer : raw;
+        const refTopic = raw.topic || inner.topic || row.topic || '';
+        const stance = inner.stance || raw.stance || '';
+        const evidence = inner.evidence || raw.evidence || '';
+        if (stance || evidence) {
+            const stanceLabel = STANCE_LABELS[stance] || stance || '';
+            const stanceColor = stance === 'pro' ? 'text-green-700' : stance === 'con' ? 'text-red-600' : 'text-gray-500';
+            refHtml = `<div class="mt-1 space-y-1.5 text-gray-700">`;
+            if (refTopic) refHtml += `<div><span class="text-gray-400">原文文章：</span>${escapeHtml(refTopic)}</div>`;
+            if (stance) refHtml += `<div><span class="text-gray-400">立場：</span><span class="font-medium ${stanceColor}">${stanceLabel}</span></div>`;
+            if (evidence) refHtml += `<div><span class="text-gray-400">依據：</span>${escapeHtmlNl(evidence)}</div>`;
+            refHtml += `</div>`;
+            return refHtml;
+        }
+    } catch {}
+    return `<pre class="mt-1 whitespace-pre-wrap text-gray-700 bg-white border border-gray-200 rounded p-2">${escapeHtml(row.reference_answer)}</pre>`;
+}
+
+let _resultsItemsCache = [];
+
+function applyResultsSort() {
+    const sortMode = document.getElementById('resultsSort')?.value || 'default';
+    const items = [..._resultsItemsCache];
+
+    const tsOf = (r) => {
+        const t = r.finished_at || r.requested_at || '';
+        const d = Date.parse(t);
+        return Number.isNaN(d) ? 0 : d;
+    };
+    const titleOf = (r) => (r.title || r.topic || '').toLowerCase();
+    const scoreOf = (r) => (r.score == null ? -1 : Number(r.score));
+
+    switch (sortMode) {
+        case 'latest':       items.sort((a, b) => tsOf(b) - tsOf(a)); break;
+        case 'oldest':       items.sort((a, b) => tsOf(a) - tsOf(b)); break;
+        case 'title':        items.sort((a, b) => titleOf(a).localeCompare(titleOf(b), 'zh-Hant')); break;
+        case 'title_desc':   items.sort((a, b) => titleOf(b).localeCompare(titleOf(a), 'zh-Hant')); break;
+        case 'score_desc':   items.sort((a, b) => scoreOf(b) - scoreOf(a)); break;
+        case 'score_asc':    items.sort((a, b) => scoreOf(a) - scoreOf(b)); break;
+        case 'model':        items.sort((a, b) => (a.model_name || '').localeCompare(b.model_name || '')); break;
+        case 'aspect':       items.sort((a, b) => (a.aspect || '').localeCompare(b.aspect || '', 'zh-Hant')); break;
+    }
+    _renderResultsTableInner(items);
+}
+
+function renderResultsTable(items) {
+    _resultsItemsCache = items || [];
+    const sortMode = document.getElementById('resultsSort')?.value || 'default';
+    if (sortMode !== 'default') {
+        applyResultsSort();
+    } else {
+        _renderResultsTableInner(_resultsItemsCache);
+    }
+}
+
+function _renderResultsTableInner(items) {
+    const tableEl = document.getElementById('resultsTable');
+    const countEl = document.getElementById('resultsCount');
+    const emptyEl = document.getElementById('resultsEmpty');
+
+    countEl.textContent = `${items.length} 題`;
+    if (emptyEl) emptyEl.classList.add('hidden');
+
+    const hasStance = items.some(r => r.task_type === 'stance_analysis');
+    const hasQA = items.some(r => r.task_type === 'qa');
+    const hasMultipleModels = new Set(items.map(r => r.model_name).filter(Boolean)).size > 1;
+
+    let html = '<table class="min-w-full text-xs divide-y divide-gray-200 border border-gray-200 rounded">';
+    html += '<thead class="bg-gray-50"><tr>';
+    html += '<th class="px-2 py-2 text-left font-medium text-gray-500 uppercase">#</th>';
+    if (hasMultipleModels) {
+        html += '<th class="px-2 py-2 text-left font-medium text-gray-500 uppercase">模型</th>';
+    }
+    html += '<th class="px-2 py-2 text-left font-medium text-gray-500 uppercase">面向</th>';
+    html += '<th class="px-2 py-2 text-left font-medium text-gray-500 uppercase">任務類型</th>';
+    if (hasStance) {
+        html += '<th class="px-2 py-2 text-left font-medium text-gray-500 uppercase">原文文章</th>';
+        html += '<th class="px-2 py-2 text-left font-medium text-gray-500 uppercase">立場</th>';
+    }
+    if (hasQA) {
+        html += '<th class="px-2 py-2 text-left font-medium text-gray-500 uppercase">文章標題</th>';
+        html += '<th class="px-2 py-2 text-left font-medium text-gray-500 uppercase">問題</th>';
+    } else {
+        html += `<th class="px-2 py-2 text-left font-medium text-gray-500 uppercase">${hasStance ? '別人留言回覆' : '內容摘要'}</th>`;
+    }
+    html += '<th class="px-2 py-2 text-center font-medium text-gray-500 uppercase">得分</th>';
+    html += '<th class="px-2 py-2 text-left font-medium text-gray-500 uppercase">評分理由</th>';
+    html += '</tr></thead><tbody class="divide-y divide-gray-100">';
+
+    items.forEach((row, i) => {
+        const taskLabel = TASK_TYPE_LABELS[row.task_type] || row.task_type;
+        const scoreColor = row.score >= 4 ? 'text-green-600' : row.score >= 3 ? 'text-yellow-600' : 'text-red-500';
+        const reasoning = (row.reasoning || '').slice(0, 80) + ((row.reasoning || '').length > 80 ? '…' : '');
+
+        html += `<tr class="hover:bg-gray-50 cursor-pointer" onclick="toggleDetail(${i})">`;
+        html += `<td class="px-2 py-2 text-gray-400">${i + 1}</td>`;
+        if (hasMultipleModels) {
+            html += `<td class="px-2 py-2 text-gray-700">${escapeHtml(row.model_name || '-')}</td>`;
+        }
+        html += `<td class="px-2 py-2"><span class="inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800">${escapeHtml(row.aspect || '社會')}</span></td>`;
+        html += `<td class="px-2 py-2 text-gray-700">${taskLabel}</td>`;
+        if (hasStance) {
+            const topic = (row.topic || '').slice(0, 40) + ((row.topic || '').length > 40 ? '…' : '');
+            const stanceLabel = STANCE_LABELS[row.stance] || row.stance || '-';
+            const stanceColor = row.stance === 'pro' ? 'text-green-700' : row.stance === 'con' ? 'text-red-600' : 'text-gray-500';
+            html += `<td class="px-2 py-2 text-gray-700" title="${row.topic || ''}">${topic || '-'}</td>`;
+            html += `<td class="px-2 py-2 font-medium ${stanceColor}">${stanceLabel}</td>`;
+        }
+        if (hasQA) {
+            const title = (row.title || '').slice(0, 40) + ((row.title || '').length > 40 ? '…' : '');
+            html += `<td class="px-2 py-2 text-gray-600 max-w-xs" title="${escapeHtml(row.title || '')}">${escapeHtml(title || '-')}</td>`;
+            // Extract question from reference_answer
+            let question = '';
+            try { question = JSON.parse(row.reference_answer || '{}').question || ''; } catch {}
+            const qSnippet = question.slice(0, 55) + (question.length > 55 ? '…' : '');
+            html += `<td class="px-2 py-2 text-gray-700 max-w-sm" title="${escapeHtml(question)}">${escapeHtml(qSnippet)}</td>`;
+        } else {
+            const snippet = (row.content || '').replace(/\n/g, ' ').slice(0, 60) + ((row.content || '').length > 60 ? '…' : '');
+            html += `<td class="px-2 py-2 text-gray-600">${escapeHtml(snippet)}</td>`;
+        }
+        html += `<td class="px-2 py-2 text-center font-semibold ${scoreColor}">${row.score ?? '-'}</td>`;
+        html += `<td class="px-2 py-2 text-gray-600">${escapeHtml(reasoning)}</td>`;
+        html += '</tr>';
+
+        // Detail row (hidden by default)
+        const detailCols = (hasStance ? 2 : 0) + (hasQA ? 2 : 1) + 5 + (hasMultipleModels ? 1 : 0);
+        html += `<tr id="detail-${i}" class="hidden bg-gray-50"><td colspan="${detailCols}" class="px-4 py-3">`;
+        html += `<div class="space-y-2 text-xs">`;
+        if (row.model_name) html += `<div><span class="font-medium text-gray-500">模型：</span><span class="text-gray-700">${escapeHtml(row.model_name)}</span></div>`;
+        if (row.judge_model) html += `<div><span class="font-medium text-gray-500">Judge：</span><span class="text-gray-700">${escapeHtml(row.judge_model)}</span></div>`;
+        if (row.task_type === 'school_qa') {
+            if (row.aspect) html += `<div><span class="font-medium text-gray-500">科目：</span><span class="text-amber-700 font-medium">${escapeHtml(row.aspect)}</span></div>`;
+            if (row.title) html += `<div><span class="font-medium text-gray-500">來源：</span><span class="text-gray-700 font-medium">${escapeHtml(row.title)}</span></div>`;
+            if (row.prompt) html += `<div><span class="font-medium text-gray-500">題目：</span><pre class="mt-1 whitespace-pre-wrap text-gray-700 bg-white border border-gray-200 rounded p-2 max-h-48 overflow-y-auto">${escapeHtmlNl(row.prompt)}</pre></div>`;
+        } else {
+            if (row.aspect) html += `<div><span class="font-medium text-gray-500">面向：</span><span class="text-amber-700 font-medium">${escapeHtml(row.aspect)}</span></div>`;
+            if (row.title) html += `<div><span class="font-medium text-gray-500">文章標題：</span><span class="text-gray-700 font-medium">${escapeHtml(row.title)}</span></div>`;
+            if (row.topic) html += `<div><span class="font-medium text-gray-500">原文文章：</span><span class="text-gray-700">${escapeHtml(row.topic)}</span></div>`;
+            if (row.content) {
+                const contentLabel = row.task_type === 'stance_analysis' ? '別人留言回覆：' : '文章內容：';
+                html += `<div><span class="font-medium text-gray-500">${contentLabel}</span><pre class="mt-1 whitespace-pre-wrap text-gray-700 bg-white border border-gray-200 rounded p-2 max-h-48 overflow-y-auto">${escapeHtmlNl(row.content)}</pre></div>`;
+            }
+        }
+        if (row.requested_model || row.requested_at || row.finished_at || row.retry_count) {
+            html += `<div><span class="font-medium text-gray-500">請求紀錄：</span><div class="mt-1 text-gray-700 space-y-1">`;
+            if (row.requested_model) html += `<div>模型 ID：<span class="font-medium">${escapeHtml(row.requested_model)}</span></div>`;
+            if (row.requested_at) html += `<div>送出時間：${escapeHtml(row.requested_at)}</div>`;
+            if (row.finished_at) html += `<div>完成時間：${escapeHtml(row.finished_at)}</div>`;
+            html += `<div>重試次數：${row.retry_count ?? 0}</div>`;
+            html += `</div></div>`;
+        }
+        if (row.request_messages && row.request_messages.length) {
+            html += `<div><span class="font-medium text-gray-500">送給模型的請求：</span><div class="mt-1 max-h-72 overflow-y-auto">${renderRequestMessages(row.request_messages)}</div></div>`;
+        } else if (row.prompt) {
+            html += `<div><span class="font-medium text-gray-500">送給模型的題目：</span><pre class="mt-1 whitespace-pre-wrap text-gray-700 bg-white border border-blue-200 rounded p-2 max-h-64 overflow-y-auto">${escapeHtmlNl(row.prompt)}</pre></div>`;
+        }
+        if (row.response_text) html += `<div><span class="font-medium text-gray-500">模型回答：</span><pre class="mt-1 whitespace-pre-wrap text-gray-700 bg-white border border-gray-200 rounded p-2 max-h-48 overflow-y-auto">${escapeHtmlNl(row.response_text)}</pre></div>`;
+        if (row.response_error) html += `<div><span class="font-medium text-gray-500">模型錯誤：</span><span class="text-red-600">${escapeHtml(row.response_error)}</span></div>`;
+        if (row.latency_ms != null || row.token_count != null) html += `<div><span class="font-medium text-gray-500">執行資訊：</span><span class="text-gray-700">latency ${row.latency_ms ?? '-'} ms / tokens ${row.token_count ?? '-'}</span></div>`;
+        const refRendered = renderRefAnswer(row);
+        if (refRendered) html += `<div><span class="font-medium text-gray-500">參考答案：</span>${refRendered}</div>`;
+        if (row.reasoning) html += `<div><span class="font-medium text-gray-500">評分理由：</span><p class="mt-1 text-gray-700 leading-relaxed whitespace-pre-wrap">${escapeHtmlNl(row.reasoning)}</p></div>`;
+        html += '</div></td></tr>';
+    });
+
+    html += '</tbody></table>';
+    tableEl.innerHTML = html;
+
+    // Show actions bar with download link
+    const actionsEl = document.getElementById('resultsActions');
+    if (actionsEl) {
+        actionsEl.classList.remove('hidden');
+        syncParticipantSampleSize(getParticipantSampleSize());
+    }
+}
+
+async function uploadAnswers(input) {
+    if (!input.files || !input.files[0]) return;
+    const file = input.files[0];
+    input.value = '';
+
+    const sectionEl = document.getElementById('humanScoringSection');
+    const summaryEl = document.getElementById('humanSummary');
+    const tableEl = document.getElementById('humanTable');
+    sectionEl.classList.remove('hidden');
+    summaryEl.textContent = '評分中，請稍候…';
+    tableEl.innerHTML = '';
+
+    const formData = new FormData();
+    formData.append('file', file);
+    // Use the same model as selected in generate modal (fallback default)
+    const modelEl = document.getElementById('gen_model');
+    formData.append('model_name', modelEl ? modelEl.value : 'gpt-oss-20b');
+
+    try {
+        const resp = await fetch(`/api/challenges/${challengeUuid}/score-answers`, {
+            method: 'POST', body: formData,
+        });
+        const data = await resp.json();
+        if (!resp.ok) {
+            summaryEl.textContent = '錯誤：' + (data.detail || '評分失敗');
+            return;
+        }
+        const avg = data.avg_score ?? '-';
+        summaryEl.innerHTML = `受試者：<b>${escapeHtml(data.participant_name || '受試者')}</b>，共 <b>${data.total}</b> 題，平均分：<b>${avg}</b>`;
+        if (data.leaderboard_rows && data.leaderboard_rows.length) {
+            const mergedRows = mergeLeaderboardRows(baseLeaderboardRows, data.leaderboard_rows);
+            renderLeaderboard(mergedRows, document.querySelector('#leaderboardSummary .text-amber-700')?.textContent?.replace('Judge: ', '') || '', latestAspectLabels);
+            document.getElementById('leaderboardSummary').classList.remove('hidden');
+        }
+
+        let html = '<table class="min-w-full text-xs divide-y divide-gray-200 border border-gray-200 rounded mt-2">';
+        html += '<thead class="bg-gray-50"><tr>';
+        html += '<th class="px-2 py-2 text-left font-medium text-gray-500 uppercase">#</th>';
+        html += '<th class="px-2 py-2 text-left font-medium text-gray-500 uppercase">文章</th>';
+        html += '<th class="px-2 py-2 text-left font-medium text-gray-500 uppercase">問題</th>';
+        html += '<th class="px-2 py-2 text-left font-medium text-gray-500 uppercase">你的答案</th>';
+        html += '<th class="px-2 py-2 text-center font-medium text-gray-500 uppercase">得分</th>';
+        html += '<th class="px-2 py-2 text-left font-medium text-gray-500 uppercase">評分理由</th>';
+        html += '</tr></thead><tbody class="divide-y divide-gray-100">';
+
+        data.items.forEach((row, i) => {
+            const scoreColor = row.score >= 4 ? 'text-green-600' : row.score >= 3 ? 'text-yellow-600' : 'text-red-500';
+            const reasoning = (row.reasoning || '').slice(0, 80) + ((row.reasoning || '').length > 80 ? '…' : '');
+            const qSnippet = (row.question || '').slice(0, 50) + ((row.question||'').length > 50 ? '…' : '');
+            const aSnippet = (row.human_answer || '').slice(0, 50) + ((row.human_answer||'').length > 50 ? '…' : '');
+            html += `<tr class="hover:bg-gray-50 cursor-pointer" onclick="toggleHuman(${i})">`;
+            html += `<td class="px-2 py-2 text-gray-400">${i + 1}</td>`;
+            html += `<td class="px-2 py-2 text-gray-600 max-w-xs" title="${escapeHtml(row.title)}">${escapeHtml((row.title||'').slice(0,30)+(row.title||'').length>30?'…':'')}</td>`;
+            html += `<td class="px-2 py-2 text-gray-700">${escapeHtml(qSnippet)}</td>`;
+            html += `<td class="px-2 py-2 text-gray-700">${escapeHtml(aSnippet)}</td>`;
+            html += `<td class="px-2 py-2 text-center font-semibold ${scoreColor}">${row.score ?? '-'}</td>`;
+            html += `<td class="px-2 py-2 text-gray-600">${escapeHtml(reasoning)}</td>`;
+            html += '</tr>';
+            html += `<tr id="human-detail-${i}" class="hidden bg-indigo-50"><td colspan="6" class="px-4 py-3 text-xs space-y-1">`;
+            html += `<div><span class="font-medium text-gray-500">問：</span>${escapeHtml(row.question)}</div>`;
+            html += `<div><span class="font-medium text-gray-500">你的答案：</span>${escapeHtml(row.human_answer)}</div>`;
+            html += `<div><span class="font-medium text-gray-500">參考答案：</span>${escapeHtml(row.reference_answer)}</div>`;
+            html += `<div><span class="font-medium text-gray-500">評分理由：</span><span class="text-gray-700 whitespace-pre-wrap">${escapeHtml(row.reasoning)}</span></div>`;
+            html += '</td></tr>';
+        });
+        html += '</tbody></table>';
+        tableEl.innerHTML = html;
+    } catch (err) {
+        summaryEl.textContent = '網路錯誤：' + err.message;
+    }
+}
+
+function toggleHuman(i) {
+    const row = document.getElementById(`human-detail-${i}`);
+    if (row) row.classList.toggle('hidden');
+}
+
+function toggleDetail(i) {
+    const row = document.getElementById(`detail-${i}`);
+    if (row) row.classList.toggle('hidden');
+}
+
+function escapeHtml(str) {
+    return (str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function escapeHtmlNl(str) {
+    return escapeHtml(str).replace(/\\n/g, '\n');
+}
+
+function openGenerateModal() {
+    document.getElementById('generateModal').classList.remove('hidden');
+    document.getElementById('basic_gen_error').classList.add('hidden');
+
+    loadBasicAspectStats();
+
+    // Context-aware defaults
+    if (challengeTaskType === 'threads') {
+        document.getElementById('basic_gen_task_types').value = 'stance_analysis';
+        document.getElementById('basic_gen_items').value = '20';
+    } else if (challengeTaskType === 'taiwan_md') {
+        document.getElementById('basic_gen_task_types').value = 'qa';
+        document.getElementById('basic_gen_items').value = '10';
+    } else if (challengeTaskType === 'school_qa') {
+        document.getElementById('basic_gen_task_types').value = 'school_qa';
+        document.getElementById('basic_gen_items').value = '10';
+    } else if (challengeTaskType === 'true_false') {
+        document.getElementById('basic_gen_task_types').value = 'true_false';
+        document.getElementById('basic_gen_items').value = '10';
+    }
+}
+function closeGenerateModal() {
+    document.getElementById('generateModal').classList.add('hidden');
+}
+
+function openLeaderboardGenerateModal() {
+    document.getElementById('leaderboardGenerateModal').classList.remove('hidden');
+    document.getElementById('gen_error').classList.add('hidden');
+    document.getElementById('gen_summary').classList.add('hidden');
+    document.getElementById('gen_table').classList.add('hidden');
+    const currentJudgeEl = document.getElementById('currentJudgeModel');
+    if (currentJudgeEl) currentJudgeEl.textContent = currentJudgeModelName;
+    toggleAdvancedEntryFields();
+}
+
+function closeLeaderboardGenerateModal() {
+    document.getElementById('leaderboardGenerateModal').classList.add('hidden');
+}
+
+function toggleAdvancedEntryFields() {
+    const target = document.getElementById('leaderboard_target')?.value || 'model';
+    document.getElementById('advancedModelFields')?.classList.toggle('hidden', target !== 'model');
+    document.getElementById('advancedParticipantFields')?.classList.toggle('hidden', target !== 'participant');
+    document.getElementById('participantSamplingFields')?.classList.toggle('hidden', true);
+    document.getElementById('testAllToggleField')?.classList.toggle('hidden', target !== 'model');
+    document.getElementById('gen_model')?.parentElement?.classList.toggle('hidden', target !== 'model');
+    const genBtn = document.getElementById('gen_btn');
+    if (genBtn) genBtn.textContent = target === 'participant' ? '完成' : '執行';
+}
+
+function toggleTestAllMode() {
+    const on = document.getElementById('testAllExisting')?.checked;
+    // Hide sampling fields when in "test all" mode
+    document.getElementById('participantSamplingFields')?.classList.toggle('hidden', !!on);
+}
+
+const TASK_TYPE_LABELS = {
+    stance_analysis: '立場分析',
+    summarization: '摘要',
+    sentiment: '情感分析',
+    classification: '分類',
+    qa: '問答',
+    true_false: '是非題',
+    school_qa: '學測題',
+};
+
+const STANCE_LABELS = {
+    pro: '支持',
+    con: '反對',
+    neutral: '中立',
+    mixed: '混合',
+};
+
+let _pollTimer = null;
+
+function startGeneratingBanner(msg) {
+    document.getElementById('generatingMsg').textContent = msg || '生成中，請稍候...';
+    document.getElementById('generatingBanner').classList.remove('hidden');
+    _pollTimer = setInterval(async () => {
+        try {
+            const r = await fetch(`/api/challenges/${challengeUuid}/generate-status`);
+            const d = await r.json();
+            if (d.status !== 'running') {
+                clearInterval(_pollTimer);
+                _pollTimer = null;
+                document.getElementById('generatingBanner').classList.add('hidden');
+                if (d.status === 'error' && d.error) {
+                    const errBanner = document.createElement('div');
+                    errBanner.className = 'mb-4 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800';
+                    errBanner.innerHTML = `<b>生成失敗：</b>${escapeHtml(d.error)}`;
+                    document.getElementById('generatingBanner').insertAdjacentElement('afterend', errBanner);
+                    setTimeout(() => errBanner.remove(), 30000);
+                } else {
+                    await loadResults();
+                    switchTab('results');
+                }
+            }
+        } catch (_) {}
+    }, 3000);
+}
+
+async function cancelGenerateTask() {
+    if (_pollTimer) { clearInterval(_pollTimer); _pollTimer = null; }
+    document.getElementById('generatingBanner').classList.add('hidden');
+    await fetch(`/api/challenges/${challengeUuid}/generate`, { method: 'DELETE' });
+}
+
+async function runGenerate() {
+    const btn = document.getElementById('gen_btn');
+    const errEl = document.getElementById('gen_error');
+    const summaryEl = document.getElementById('gen_summary');
+    const tableEl = document.getElementById('gen_table');
+    const selectedAspects = getBasicSelectedAspects();
+    const leaderboardTarget = document.getElementById('leaderboard_target').value;
+    const leaderboardSampleSize = getParticipantSampleSize();
+    const leaderboardSampleScope = document.getElementById('leaderboard_sample_scope').value;
+    const testAll = document.getElementById('testAllExisting')?.checked;
+    errEl.classList.add('hidden');
+    summaryEl.classList.add('hidden');
+    tableEl.classList.add('hidden');
+    btn.disabled = true;
+    btn.textContent = '執行中...';
+
+    // Branch: "test new model against all existing questions" mode
+    if (leaderboardTarget === 'model' && testAll) {
+        const modelName = (document.getElementById('gen_model').value || '').trim();
+        if (!modelName) {
+            errEl.textContent = '請輸入模型名稱。';
+            errEl.classList.remove('hidden');
+            btn.disabled = false;
+            btn.textContent = '執行';
+            return;
+        }
+        const fd = new FormData();
+        fd.append('model_name', modelName);
+        fd.append('judge_model_name', currentJudgeModelName || '');
+        try {
+            const resp = await fetch(`/api/challenges/${challengeUuid}/test-new-model`, { method: 'POST', body: fd });
+            const data = await resp.json();
+            if (resp.ok && data.status === 'running') {
+                closeLeaderboardGenerateModal();
+                startGeneratingBanner(data.message || `${modelName} 測試中…`);
+            } else {
+                errEl.textContent = data.detail || '執行失敗';
+                errEl.classList.remove('hidden');
+            }
+        } catch (e) {
+            errEl.textContent = '網路錯誤：' + e.message;
+            errEl.classList.remove('hidden');
+        }
+        btn.disabled = false;
+        btn.textContent = '執行';
+        return;
+    }
+
+    if (selectedAspects.length === 0) {
+        errEl.textContent = '請至少選擇一個面向。';
+        errEl.classList.remove('hidden');
+        btn.disabled = false;
+        btn.textContent = '執行';
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('model_name', document.getElementById('gen_model').value);
+    formData.append('model_names', document.getElementById('gen_model').value);
+    formData.append('model_api_base_url', document.getElementById('model_api_base_url').value);
+    formData.append('judge_model_name', currentJudgeModelName);
+    formData.append('task_types', document.getElementById('basic_gen_task_types').value);
+    formData.append('aspects', selectedAspects.join(','));
+    formData.append('leaderboard_target', leaderboardTarget);
+    formData.append('leaderboard_sample_size', String(Math.max(1, Math.min(leaderboardSampleSize, 100))));
+    formData.append('leaderboard_sample_scope', leaderboardSampleScope);
+    formData.append('items_per_task', document.getElementById('basic_gen_items').value);
+
+    try {
+        const resp = await fetch(`/api/challenges/${challengeUuid}/generate`, { method: 'POST', body: formData });
+        const data = await resp.json();
+        if (resp.ok && data.status === 'running') {
+            closeLeaderboardGenerateModal();
+            startGeneratingBanner(data.message || '生成中，請稍候...');
+            btn.disabled = false;
+            btn.textContent = '執行';
+            return;
+        }
+        if (resp.ok) {
+            const avg = data.avg_score == null ? '-' : Number(data.avg_score).toFixed(3);
+            const passLabel = data.pass ? '<span class="text-green-700 font-semibold">PASS ✓</span>' : '<span class="text-red-600 font-semibold">FAIL ✗</span>';
+            const filtered = data.filtered_items ?? 0;
+            const reasonLabels = {
+                invalid_topic: '主題不合格',
+                unsupported_stance: '非支持反對',
+                no_replies: '無留言',
+                unsupported_language: '非中英文',
+            };
+            const reasonText = Object.entries(data.filtered_reasons || {})
+                .filter(([, count]) => count > 0)
+                .map(([key, count]) => `${reasonLabels[key] || key} ${count}`)
+                .join('、');
+            const filteredText = reasonText ? `<b>${filtered}</b>（${reasonText}）` : `<b>${filtered}</b>`;
+            const selectedAspectText = (data.selected_aspects || selectedAspects).join(' / ');
+            const sourceMatched = data.source_rows_matched ?? data.source_items ?? data.total_items;
+            const sourceTotal = data.source_rows_total ?? sourceMatched;
+            const sampledRows = data.source_rows_sampled ?? sourceMatched;
+            const rankTarget = data.leaderboard_target === 'participant' ? '受試者' : '模型';
+            const sampleScope = data.leaderboard_sample_scope === 'per_aspect' ? '每個面向' : '整個題目';
+            const apiText = data.model_api_base_url ? `，API：<b>${escapeHtml(data.model_api_base_url)}</b>` : '';
+            summaryEl.innerHTML = `完成！來源資料：<b>${sourceMatched}</b> / ${sourceTotal} 筆，抽樣：<b>${sampledRows}</b> 筆，生成題目來源：<b>${data.source_items || data.total_items}</b>，模型結果列：<b>${data.total_items}</b>，被過濾：${filteredText}，平均分：<b>${avg}</b>，Judge：<b>${escapeHtml(data.judge_model_name || '-')}</b>，模型數：<b>${(data.tested_models || []).length}</b>，面向：<b>${escapeHtml(selectedAspectText)}</b>，排名對象：<b>${rankTarget}</b>，抽樣設定：<b>${data.leaderboard_sample_size || leaderboardSampleSize}</b> 題 / ${sampleScope}${apiText}，驗收：${passLabel}`;
+            summaryEl.classList.remove('hidden');
+            syncParticipantSampleSize(data.leaderboard_sample_size || leaderboardSampleSize);
+            renderLeaderboard(data.leaderboard || [], data.judge_model_name || '', data.aspect_labels || DEFAULT_ASPECTS);
+            document.getElementById('leaderboardSummary').classList.remove('hidden');
+
+            // Build results table
+            if (data.items && data.items.length > 0) {
+                renderResultsTable(data.items);
+                switchTab('results');
+            }
+        } else {
+            errEl.textContent = data.detail || '執行失敗';
+            errEl.classList.remove('hidden');
+        }
+    } catch (err) {
+        errEl.textContent = '網路錯誤：' + err.message;
+        errEl.classList.remove('hidden');
+    }
+    btn.disabled = false;
+    btn.textContent = '執行';
+}
+
+async function runBasicGenerate() {
+    const btn = document.getElementById('basic_gen_btn');
+    const errEl = document.getElementById('basic_gen_error');
+    const selectedAspects = getBasicSelectedAspects();
+    errEl.classList.add('hidden');
+    btn.disabled = true;
+    btn.textContent = '執行中...';
+
+    if (selectedAspects.length === 0) {
+        errEl.textContent = '請至少選擇一個面向。';
+        errEl.classList.remove('hidden');
+        btn.disabled = false;
+        btn.textContent = '執行';
+        return;
+    }
+
+    const itemsInput = document.getElementById('basic_gen_items');
+    const maxAllowed = parseInt(itemsInput.max || '0');
+    if (maxAllowed > 0 && parseInt(itemsInput.value) > maxAllowed) {
+        errEl.textContent = `抽取篇數不可超過來源篇數（${maxAllowed} 篇）。`;
+        errEl.classList.remove('hidden');
+        btn.disabled = false;
+        btn.textContent = '執行';
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('model_name', document.getElementById('basic_gen_model').value);
+    formData.append('model_names', document.getElementById('basic_gen_model').value);
+    formData.append('judge_model_name', document.getElementById('basic_judge_model').value);
+    formData.append('task_types', document.getElementById('basic_gen_task_types').value);
+    formData.append('aspects', selectedAspects.join(','));
+    formData.append('items_per_task', document.getElementById('basic_gen_items').value);
+    formData.append('questions_per_article', document.getElementById('basic_gen_questions_per_article').value);
+
+    try {
+        const resp = await fetch(`/api/challenges/${challengeUuid}/generate`, { method: 'POST', body: formData });
+        const data = await resp.json();
+        if (resp.ok && data.status === 'running') {
+            closeGenerateModal();
+            startGeneratingBanner(data.message || '生成中，請稍候...');
+        } else if (resp.ok) {
+            closeGenerateModal();
+            loadResults();
+            switchTab('results');
+        } else {
+            errEl.textContent = data.detail || '執行失敗';
+            errEl.classList.remove('hidden');
+            btn.disabled = false;
+            btn.textContent = '執行';
+        }
+    } catch (err) {
+        errEl.textContent = '網路錯誤：' + err.message;
+        errEl.classList.remove('hidden');
+        btn.disabled = false;
+        btn.textContent = '執行';
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    const downloadSampleInput = document.getElementById('download_sample_size');
+    if (downloadSampleInput) {
+        downloadSampleInput.addEventListener('input', () => {
+            syncParticipantSampleSize(downloadSampleInput.value);
+        });
+        syncParticipantSampleSize(downloadSampleInput.value);
+    }
+
+    const modalSampleInput = document.getElementById('leaderboard_sample_size');
+    if (modalSampleInput) {
+        modalSampleInput.addEventListener('input', () => {
+            syncParticipantSampleSize(modalSampleInput.value);
+        });
+    }
+});
+
+let _pvAllQuestions = [];
+let _pvSelected = new Set(['ideal', 'easy', 'hard']);  // all on by default
+
+// ===== 選題 Modal =====
+let _sqAllQuestions = [];
+let _sqSelected = new Set();
+let _sqOrderedIndices = null; // set by applyMix; null = sort numerically
+
+function closeSelectQModal() {
+    document.getElementById('selectQModal').classList.add('hidden');
+}
+
+async function openSelectQModal() {
+    document.getElementById('selectQModal').classList.remove('hidden');
+    document.getElementById('selectQBody').innerHTML = '<p class="text-gray-400 text-center py-8">載入中…</p>';
+    document.getElementById('selectQSearch').value = '';
+    _sqAllQuestions = [];
+    _sqSelected = new Set();
+
+    try {
+        const resp = await fetch(`/api/challenges/${challengeUuid}/question-list`);
+        const data = await resp.json();
+        if (!resp.ok) {
+            document.getElementById('selectQBody').innerHTML = `<p class="text-red-600 text-center py-4">${escapeHtml(data.detail || '載入失敗')}</p>`;
+            return;
+        }
+        _sqAllQuestions = data.questions || [];
+        // default: select all
+        _sqAllQuestions.forEach(q => _sqSelected.add(q.index));
+        // show Google Form button only for true_false
+        const gfBtn = document.getElementById('selectQGFormBtn');
+        if (gfBtn) gfBtn.classList.toggle('hidden', challengeTaskType !== 'true_false');
+        renderSelectQTable();
+    } catch (err) {
+        document.getElementById('selectQBody').innerHTML = `<p class="text-red-600 text-center py-4">網路錯誤：${escapeHtml(err.message)}</p>`;
+    }
+}
+
+function applyMix() {
+    const nIdeal = Math.max(0, parseInt(document.getElementById('sqMixIdeal').value) || 0);
+    const nEasy  = Math.max(0, parseInt(document.getElementById('sqMixEasy').value)  || 0);
+    const nHard  = Math.max(0, parseInt(document.getElementById('sqMixHard').value)  || 0);
+    const balanceAspect = document.getElementById('sqBalanceAspect').checked;
+    const msgEl = document.getElementById('sqMixMsg');
+
+    function shuffle(arr) {
+        const a = [...arr];
+        for (let i = a.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [a[i], a[j]] = [a[j], a[i]];
+        }
+        return a;
+    }
+
+    // Round-robin across titles within a pool, returns indices
+    // maxPerTitle: cap how many questions any single article can contribute
+    function roundRobinByTitle(pool, n, maxPerTitle) {
+        const byTitle = {};
+        pool.forEach(q => {
+            const t = q.title || '其他';
+            if (!byTitle[t]) byTitle[t] = [];
+            byTitle[t].push(q.index);
+        });
+        const cap = maxPerTitle || Math.max(1, Math.floor(n / 10));
+        // Shuffle then cap each bucket
+        const buckets = Object.values(byTitle).map(b => shuffle(b).slice(0, cap));
+        const ptrs = buckets.map(() => 0);
+        const result = [];
+        while (result.length < n) {
+            let added = false;
+            for (let i = 0; i < buckets.length && result.length < n; i++) {
+                if (ptrs[i] < buckets[i].length) {
+                    result.push(buckets[i][ptrs[i]++]);
+                    added = true;
+                }
+            }
+            if (!added) break;
+        }
+        return result;
+    }
+
+    // Sample n indices: always diversify by article title; optionally also balance across aspects
+    function sample(pool, n) {
+        if (n <= 0 || pool.length === 0) return [];
+
+        if (!balanceAspect) {
+            // Just diversify by article title
+            return roundRobinByTitle(shuffle(pool), n);
+        }
+
+        // Group by aspect, then within each aspect diversify by title via round-robin
+        const byAspect = {};
+        pool.forEach(q => {
+            const a = q.aspect || '其他';
+            if (!byAspect[a]) byAspect[a] = [];
+            byAspect[a].push(q);
+        });
+        // Shuffle questions within each aspect before title round-robin
+        const aspectKeys = Object.keys(byAspect);
+        const aspectBuckets = aspectKeys.map(a => shuffle(byAspect[a]));
+        const aspectPtrs = aspectKeys.map(() => 0);
+
+        // Per-aspect title-round-robin state (with per-title cap same as non-aspect path)
+        const titleCap = Math.max(1, Math.floor(n / 10));
+        const titleStates = aspectBuckets.map(bucket => {
+            const byTitle = {};
+            bucket.forEach(q => {
+                const t = q.title || '其他';
+                if (!byTitle[t]) byTitle[t] = [];
+                byTitle[t].push(q.index);
+            });
+            const tbuckets = Object.values(byTitle).map(b => shuffle(b).slice(0, titleCap));
+            return { tbuckets, ptrs: tbuckets.map(() => 0) };
+        });
+
+        const result = [];
+        while (result.length < n) {
+            let added = false;
+            for (let ai = 0; ai < aspectKeys.length && result.length < n; ai++) {
+                const { tbuckets, ptrs } = titleStates[ai];
+                for (let ti = 0; ti < tbuckets.length; ti++) {
+                    if (ptrs[ti] < tbuckets[ti].length) {
+                        result.push(tbuckets[ti][ptrs[ti]++]);
+                        added = true;
+                        break;
+                    }
+                }
+            }
+            if (!added) break;
+        }
+        return result;
+    }
+
+    const pools = { ideal: [], easy: [], hard: [] };
+    _sqAllQuestions.forEach(q => { if (pools[q.p_category]) pools[q.p_category].push(q); });
+
+    const shuffled = shuffle([
+        ...sample(pools.ideal, nIdeal),
+        ...sample(pools.easy,  nEasy),
+        ...sample(pools.hard,  nHard),
+    ]);
+
+    // De-cluster: avoid adjacent questions with same article title OR same 4-char statement prefix
+    function deCluster(indices) {
+        if (indices.length <= 1) return indices;
+        const qByIdx = {};
+        _sqAllQuestions.forEach(q => { qByIdx[q.index] = q; });
+        const remaining = [...indices];
+        const result = [];
+        while (remaining.length > 0) {
+            const prev = result.length > 0 ? qByIdx[result[result.length - 1]] : null;
+            const prevTitle = prev?.title || '';
+            const prevPfx   = (prev?.statement || '').slice(0, 3);
+            // 1st choice: different title AND different prefix
+            let ni = remaining.findIndex(idx => {
+                const q = qByIdx[idx];
+                return (q?.title || '') !== prevTitle && (q?.statement || '').slice(0, 3) !== prevPfx;
+            });
+            // 2nd choice: at least different prefix (even if same title)
+            if (ni === -1) ni = remaining.findIndex(idx => (qByIdx[idx]?.statement || '').slice(0, 3) !== prevPfx);
+            // 3rd choice: at least different title
+            if (ni === -1) ni = remaining.findIndex(idx => (qByIdx[idx]?.title || '') !== prevTitle);
+            if (ni === -1) ni = 0;
+            result.push(remaining.splice(ni, 1)[0]);
+        }
+        return result;
+    }
+    const picked = deCluster(shuffled);
+
+    _sqSelected = new Set(picked);
+    _sqOrderedIndices = picked; // preserve de-clustered order for download
+
+    const warnings = [];
+    if (nIdeal > pools.ideal.length) warnings.push(`理想只有 ${pools.ideal.length} 題`);
+    if (nEasy  > pools.easy.length)  warnings.push(`太簡單只有 ${pools.easy.length} 題`);
+    if (nHard  > pools.hard.length)  warnings.push(`太難只有 ${pools.hard.length} 題`);
+    msgEl.textContent = warnings.length ? '⚠ ' + warnings.join('、') : `已選 ${picked.length} 題`;
+
+    renderSelectQTable();
+}
+
+function renderSelectQTable() {
+    const query = (document.getElementById('selectQSearch').value || '').toLowerCase();
+    const visible = query
+        ? _sqAllQuestions.filter(q => (q.statement || '').toLowerCase().includes(query) || (q.title || '').toLowerCase().includes(query))
+        : _sqAllQuestions;
+
+    if (visible.length === 0) {
+        document.getElementById('selectQBody').innerHTML = '<p class="text-gray-500 text-center py-8">無符合題目。</p>';
+        _updateSelectQCount();
+        return;
+    }
+
+    const hasPValue = _sqAllQuestions.some(q => q.p_value != null);
+    const query2 = query; // capture for header checkbox
+    let html = '<table class="min-w-full text-xs divide-y divide-gray-200">';
+    html += '<thead class="bg-gray-50 sticky top-0"><tr>';
+    html += `<th class="px-2 py-2 w-8"><input type="checkbox" id="sqCheckAll" onchange="selectQVisible(${query2 ? '"filtered"' : '"all"'}, this.checked)" class="h-3.5 w-3.5"></th>`;
+    html += '<th class="px-2 py-2 text-left font-medium text-gray-500 uppercase">陳述句</th>';
+    html += '<th class="px-2 py-2 text-left font-medium text-gray-500 uppercase w-16">面向</th>';
+    if (hasPValue) html += '<th class="px-2 py-2 text-center font-medium text-gray-500 uppercase w-16">P 值</th>';
+    html += '</tr></thead><tbody class="divide-y divide-gray-100">';
+
+    const catDot = { ideal: 'bg-green-500', easy: 'bg-red-400', hard: 'bg-orange-400', unknown: 'bg-gray-300' };
+    visible.forEach(q => {
+        const checked = _sqSelected.has(q.index) ? 'checked' : '';
+        const rowBg = _sqSelected.has(q.index) ? 'bg-indigo-50' : 'hover:bg-gray-50';
+        html += `<tr class="${rowBg}">`;
+        html += `<td class="px-2 py-2 text-center"><input type="checkbox" ${checked} onchange="toggleSQ(${q.index}, this.checked)" class="h-3.5 w-3.5"></td>`;
+        html += `<td class="px-2 py-2 text-gray-700">${escapeHtml(q.statement || q.title || '')}</td>`;
+        html += `<td class="px-2 py-2"><span class="inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800">${escapeHtml(q.aspect || '-')}</span></td>`;
+        if (hasPValue) {
+            const dot = catDot[q.p_category] || 'bg-gray-300';
+            const pText = q.p_value != null ? q.p_value.toFixed(3) : '-';
+            html += `<td class="px-2 py-2 text-center"><span class="inline-flex items-center gap-1"><span class="inline-block w-2 h-2 rounded-full ${dot}"></span>${pText}</span></td>`;
+        }
+        html += `</tr>`;
+    });
+    html += '</tbody></table>';
+    document.getElementById('selectQBody').innerHTML = html;
+    _updateSelectQCount();
+}
+
+function toggleSQ(index, checked) {
+    if (checked) _sqSelected.add(index);
+    else _sqSelected.delete(index);
+    _sqOrderedIndices = null;
+    _updateSelectQCount();
+}
+
+function selectQAll(checked) {
+    if (checked) _sqAllQuestions.forEach(q => _sqSelected.add(q.index));
+    else _sqSelected.clear();
+    _sqOrderedIndices = null;
+    renderSelectQTable();
+}
+
+function selectQVisible(mode, checked) {
+    const query = (document.getElementById('selectQSearch').value || '').toLowerCase();
+    const visible = query
+        ? _sqAllQuestions.filter(q => (q.statement || '').toLowerCase().includes(query) || (q.title || '').toLowerCase().includes(query))
+        : _sqAllQuestions;
+    visible.forEach(q => checked ? _sqSelected.add(q.index) : _sqSelected.delete(q.index));
+    _sqOrderedIndices = null;
+    renderSelectQTable();
+}
+
+function _updateSelectQCount() {
+    document.getElementById('selectQCount').textContent = `已選 ${_sqSelected.size} 題`;
+    const none = _sqSelected.size === 0;
+    document.getElementById('selectQDownloadBtn').disabled = none;
+    const gfBtn = document.getElementById('selectQGFormBtn');
+    if (gfBtn) gfBtn.disabled = none;
+}
+
+function _sqIndicesParam() {
+    if (_sqOrderedIndices) return _sqOrderedIndices.filter(i => _sqSelected.has(i)).join(',');
+    return [..._sqSelected].sort((a, b) => a - b).join(',');
+}
+
+function downloadSelectQ() {
+    if (_sqSelected.size === 0) return;
+    window.location.href = `/api/challenges/${challengeUuid}/export-questions?indices=${_sqIndicesParam()}`;
+}
+
+function downloadSelectQGoogleForm() {
+    if (_sqSelected.size === 0) return;
+    window.location.href = `/api/challenges/${challengeUuid}/export/google-form-script?indices=${_sqIndicesParam()}`;
+}
+
+// ===== P 值 Modal =====
+function closePValuesModal() {
+    document.getElementById('pvaluesModal').classList.add('hidden');
+}
+
+function _pvCategory(p) {
+    if (p == null) return 'unknown';
+    if (p > 0.7) return 'easy';
+    if (p < 0.4) return 'hard';
+    return 'ideal';
+}
+
+function setPvFilter(filter) {
+    if (filter === 'all') {
+        // toggle: if all selected → deselect all, else select all
+        const allCats = ['ideal', 'easy', 'hard'];
+        const allOn = allCats.every(c => _pvSelected.has(c));
+        allCats.forEach(c => allOn ? _pvSelected.delete(c) : _pvSelected.add(c));
+    } else {
+        if (_pvSelected.has(filter)) _pvSelected.delete(filter);
+        else _pvSelected.add(filter);
+    }
+    _updatePvFilterButtons();
+    _renderPvTable();
+}
+
+function _updatePvFilterButtons() {
+    const allCats = ['ideal', 'easy', 'hard'];
+    const allOn = allCats.every(c => _pvSelected.has(c));
+    const allBtn = document.getElementById('pv-filter-all');
+    allBtn.classList.toggle('ring-2', allOn);
+    allBtn.classList.toggle('ring-offset-1', allOn);
+    allBtn.classList.toggle('font-bold', allOn);
+    allCats.forEach(cat => {
+        const btn = document.getElementById(`pv-filter-${cat}`);
+        if (!btn) return;
+        btn.classList.toggle('ring-2', _pvSelected.has(cat));
+        btn.classList.toggle('ring-offset-1', _pvSelected.has(cat));
+        btn.classList.toggle('font-bold', _pvSelected.has(cat));
+    });
+}
+
+function _renderPvTable() {
+    const bodyEl = document.getElementById('pvaluesBody');
+    const infoEl = document.getElementById('pvaluesDownloadInfo');
+    const dlBtn = document.getElementById('pvaluesDownloadBtn');
+
+    const allCats = ['ideal', 'easy', 'hard'];
+    const allOn = allCats.every(c => _pvSelected.has(c));
+    const filtered = allOn
+        ? _pvAllQuestions
+        : _pvAllQuestions.filter(q => _pvSelected.has(_pvCategory(q.p_value)));
+
+    if (filtered.length === 0) {
+        bodyEl.innerHTML = '<p class="text-gray-500 text-center py-8">此篩選條件下無題目。</p>';
+        infoEl.textContent = '';
+        dlBtn.href = '#';
+        return;
+    }
+
+    let html = '<table class="min-w-full text-xs divide-y divide-gray-200 border border-gray-200 rounded">';
+    html += '<thead class="bg-gray-50 sticky top-0"><tr>';
+    html += '<th class="px-2 py-2 text-left font-medium text-gray-500 uppercase w-8">#</th>';
+    html += '<th class="px-2 py-2 text-left font-medium text-gray-500 uppercase">陳述句</th>';
+    html += '<th class="px-2 py-2 text-center font-medium text-gray-500 uppercase w-20">P 值</th>';
+    html += '<th class="px-2 py-2 text-center font-medium text-gray-500 uppercase w-20">答對/總計</th>';
+    html += '<th class="px-2 py-2 text-center font-medium text-gray-500 uppercase w-24">判斷</th>';
+    html += '</tr></thead><tbody class="divide-y divide-gray-100">';
+
+    filtered.forEach((q, i) => {
+        const p = q.p_value;
+        const cat = _pvCategory(p);
+        const dotColor = cat === 'easy' ? 'bg-red-400' : cat === 'hard' ? 'bg-orange-400' : cat === 'ideal' ? 'bg-green-500' : 'bg-gray-300';
+        const label = cat === 'easy' ? '太簡單' : cat === 'hard' ? '太難' : cat === 'ideal' ? '理想' : '-';
+        const pText = p == null ? '-' : p.toFixed(3);
+        html += `<tr class="hover:bg-gray-50">`;
+        html += `<td class="px-2 py-2 text-gray-400">${i + 1}</td>`;
+        html += `<td class="px-2 py-2 text-gray-700 max-w-md">${escapeHtml(q.statement || '')}</td>`;
+        html += `<td class="px-2 py-2 text-center font-semibold text-gray-800">${pText}</td>`;
+        html += `<td class="px-2 py-2 text-center text-gray-600">${q.correct}/${q.total}</td>`;
+        html += `<td class="px-2 py-2 text-center"><span class="inline-flex items-center gap-1"><span class="inline-block w-2 h-2 rounded-full ${dotColor}"></span>${label}</span></td>`;
+        html += `</tr>`;
+    });
+    html += '</tbody></table>';
+    bodyEl.innerHTML = html;
+
+    // Build download URL with categories param
+    const params = new URLSearchParams({ sample_size: filtered.length });
+    const allCatsCheck = ['ideal', 'easy', 'hard'];
+    const allOnCheck = allCatsCheck.every(c => _pvSelected.has(c));
+    if (!allOnCheck && _pvSelected.size > 0) {
+        params.set('categories', [..._pvSelected].join(','));
+    }
+    dlBtn.href = `/api/challenges/${challengeUuid}/export-questions?${params.toString()}`;
+    infoEl.textContent = `共 ${filtered.length} 題`;
+}
+
+async function openPValuesModal() {
+    document.getElementById('pvaluesModal').classList.remove('hidden');
+    const bodyEl = document.getElementById('pvaluesBody');
+    const metaEl = document.getElementById('pvaluesMeta');
+    bodyEl.innerHTML = '<p class="text-gray-400 text-center py-8">載入中…</p>';
+    metaEl.textContent = '';
+    _pvAllQuestions = [];
+    _pvSelected = new Set(['ideal', 'easy', 'hard']);
+    _updatePvFilterButtons();
+
+    try {
+        const resp = await fetch(`/api/challenges/${challengeUuid}/p-values`);
+        const data = await resp.json();
+        if (!resp.ok) {
+            bodyEl.innerHTML = `<p class="text-red-600 text-center py-4">${escapeHtml(data.detail || '載入失敗')}</p>`;
+            return;
+        }
+        const participants = data.participants || [];
+        if (participants.length === 0) {
+            bodyEl.innerHTML = '<p class="text-gray-500 text-center py-8">尚無模型或受試者資料。</p>';
+            return;
+        }
+        metaEl.textContent = `${participants.length} 個模型／受試者：${participants.join('、')}`;
+        _pvAllQuestions = data.questions || [];
+
+        // Update filter button labels with counts
+        const counts = { all: _pvAllQuestions.length, ideal: 0, easy: 0, hard: 0 };
+        _pvAllQuestions.forEach(q => { const c = _pvCategory(q.p_value); if (counts[c] !== undefined) counts[c]++; });
+        document.getElementById('pv-filter-all').textContent   = `全部（${counts.all}）`;
+        document.getElementById('pv-filter-ideal').textContent = `理想 0.4–0.7（${counts.ideal}）`;
+        document.getElementById('pv-filter-easy').textContent  = `太簡單 >0.7（${counts.easy}）`;
+        document.getElementById('pv-filter-hard').textContent  = `太難 <0.4（${counts.hard}）`;
+
+        _renderPvTable();
+    } catch (err) {
+        bodyEl.innerHTML = `<p class="text-red-600 text-center py-4">網路錯誤：${escapeHtml(err.message)}</p>`;
+    }
+}
+</script>
+{% endblock %}
+

@@ -4,12 +4,16 @@ import typer
 from pathlib import Path
 import asyncio
 import logging
+from dotenv import load_dotenv
 from .config.loader import load_config
 from .orchestrator.runner import run_benchmark
 from .report.generator import write_report
 from .utils.logging import get_logger
 import json
 import time
+
+# Load .env from project root (same dir as pyproject.toml)
+load_dotenv(Path(__file__).parent.parent / ".env")
 
 app = typer.Typer(add_completion=False, help="LLM Inference Benchmark Toolkit")
 log = get_logger(__name__)

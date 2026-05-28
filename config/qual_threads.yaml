@@ -1,0 +1,42 @@
+qual:
+  # === 資料來源：Threads 爬蟲本地檔案 ===
+  data_source:
+    threads:
+      - directory: "C:/Users/ptwclin.NB338/Projects/threads-scraper/output_reply"
+        keyword: "AI"
+        include_replies: false
+        min_like_count: 5
+        limit: 200
+      - directory: "C:/Users/ptwclin.NB338/Projects/threads-scraper/output_reply_T"
+        keyword: "台北"
+        include_replies: false
+        min_like_count: 5
+        limit: 200
+
+  # === Benchmark 任務設定 ===
+  task_types:
+    - "summarization"
+    - "sentiment"
+    - "classification"
+    - "qa"
+  items_per_task: 5
+
+  # === 待測模型 ===
+  models_under_test:
+    - name: "gpt-oss-20b"
+      base_url: "https://llmgw.elandai.cloud/v1"
+      api_key: "env:LITELLM_API_KEY"
+      model: "gpt-oss-20b"
+
+  # === Judge 設定 ===
+  judge:
+    model:
+      name: "judge"
+      base_url: "https://llmgw.elandai.cloud/v1"
+      api_key: "env:JUDGE_LITELLM_API_KEY"
+      model: "gpt-oss-20b"
+    max_concurrent: 2
+
+  # === 輸出設定 ===
+  output_dir: "results/qual"
+  db_path: "llmbench_qual.db"

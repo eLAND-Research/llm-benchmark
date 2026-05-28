@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+
+{% block title %}Import School Exam - LLMBench{% endblock %}
+
+{% block content %}
+<div class="px-4 sm:px-0 max-w-2xl">
+    <div class="mb-6">
+        <a href="/challenges" class="text-sm text-gray-500 hover:text-gray-700">&larr; Back to Challenges</a>
+        <h2 class="text-2xl font-bold text-gray-900 mt-2">Import 國小／國中題庫</h2>
+        <p class="mt-1 text-sm text-gray-500">匯入考試 PDF 或內建課綱材料，自動產生選擇題／填充題／問答題 Challenge</p>
+    </div>
+
+    <div class="bg-white shadow rounded-lg p-6">
+        <form id="importForm" class="space-y-6">
+
+            <!-- Name -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700">
+                    Challenge 名稱 <span class="text-red-500">*</span>
+                </label>
+                <input type="text" id="name" required
+                    class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                    placeholder="e.g., 國小國文數學題庫">
+            </div>
+
+            <!-- Description -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700">描述</label>
+                <textarea id="description" rows="2"
+                    class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                    placeholder="說明這批題目的用途..."></textarea>
+            </div>
+
+            <!-- Source tabs -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">資料來源</label>
+                <div class="flex rounded-md border border-gray-300 overflow-hidden text-sm">
+                    <button type="button" id="tabBuiltin"
+                        class="flex-1 py-2 px-3 font-medium bg-indigo-50 text-indigo-700 border-r border-gray-300 tab-btn"
+                        onclick="switchTab('builtin')">內建課綱材料</button>
+                    <button type="button" id="tabExamBank"
+                        class="flex-1 py-2 px-3 font-medium text-gray-600 hover:bg-gray-50 tab-btn"
+                        onclick="switchTab('exambank')">題庫 PDF（exam_bank）</button>
+                </div>
+            </div>
+
+            <!-- Built-in panel -->
+            <div id="panelBuiltin" class="space-y-4">
+                <p class="text-xs text-gray-500">使用內建課綱知識文章，由 LLM 自動依文章內容出題。</p>
+            </div>
+
+            <!-- Exam bank panel -->
+            <div id="panelExamBank" class="space-y-4 hidden">
+                <p class="text-xs text-gray-500">從 manifest CSV 或本地 zip 中解析考試 PDF，將試卷原文作為出題素材。</p>
+
+                <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                    <input type="checkbox" id="parseQuestions"
+                        class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                    直接解析題目（不走 Designer LLM，從 PDF 直接取出選擇題）
+                </label>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Manifest CSV / JSON 路徑</label>
+                    <input type="text" id="manifest"
+                        class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                        placeholder="data/exam_bank/manifests/elementary_exam_links.csv">
+                    <p class="mt-1 text-xs text-gray-500">伺服器上的相對路徑，留空跳過 manifest 下載</p>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Zip 檔案路徑</label>
+                    <input type="text" id="zipArchives"
+                        class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                        placeholder="data/exam_bank/raw_archives/jingwen_105_108.zip">
+                    <p class="mt-1 text-xs text-gray-500">多個路徑以逗號分隔</p>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">年級篩選（不選 = 全部）</label>
+                    <div class="flex flex-wrap gap-3">
+                        {% for g in ["1","2","3","4","5","6"] %}
+                        <label class="flex items-center gap-1.5 text-sm text-gray-700 cursor-pointer">
+                            <input type="checkbox" name="grade" value="{{ g }}"
+                                class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                            {{ g }} 年級
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Level (shared) -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700">年段</label>
+                <select id="level" class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                    <option value="both">國小 + 國中（both）</option>
+                    <option value="elementary">國小（elementary）</option>
+                    <option value="middle_school">國中（middle_school）</option>
+                    <option value="high_school">高中（high_school）</option>
+                </select>
+            </div>
+
+            <!-- Subjects (shared) -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">科目篩選（不選 = 全部）</label>
+                <div class="grid grid-cols-4 gap-2">
+                    {% for subj in ["國文", "英語", "數學", "自然", "社會", "理化", "生物", "歷史", "地理", "公民"] %}
+                    <label class="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                        <input type="checkbox" name="subject" value="{{ subj }}"
+                            class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                        {{ subj }}
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Limit (shared) -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700">最大筆數</label>
+                <input type="number" id="limit" placeholder="不限"
+                    class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                <p class="mt-1 text-xs text-gray-500">每筆材料會產生 3 道題目（選擇題＋填充題＋問答題）</p>
+            </div>
+
+            <!-- Error -->
+            <div id="errorMsg" class="hidden text-sm text-red-600 bg-red-50 rounded p-3"></div>
+
+            <!-- Buttons -->
+            <div class="flex justify-end space-x-3">
+                <a href="/challenges"
+                    class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+                    取消
+                </a>
+                <button type="submit" id="submitBtn"
+                    class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50">
+                    匯入
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentTab = 'builtin';
+
+function switchTab(tab) {
+    currentTab = tab;
+    document.getElementById('panelBuiltin').classList.toggle('hidden', tab !== 'builtin');
+    document.getElementById('panelExamBank').classList.toggle('hidden', tab !== 'exambank');
+    document.getElementById('tabBuiltin').className =
+        'flex-1 py-2 px-3 font-medium border-r border-gray-300 tab-btn ' +
+        (tab === 'builtin' ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:bg-gray-50');
+    document.getElementById('tabExamBank').className =
+        'flex-1 py-2 px-3 font-medium tab-btn ' +
+        (tab === 'exambank' ? 'bg-indigo-50 text-indigo-700' : 'text-gray-600 hover:bg-gray-50');
+}
+
+document.getElementById('importForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const errorEl = document.getElementById('errorMsg');
+    const submitBtn = document.getElementById('submitBtn');
+    errorEl.classList.add('hidden');
+    submitBtn.disabled = true;
+    submitBtn.textContent = '匯入中...';
+
+    const checkedSubjects = [...document.querySelectorAll('input[name="subject"]:checked')].map(el => el.value);
+    const checkedGrades   = [...document.querySelectorAll('input[name="grade"]:checked')].map(el => el.value);
+
+    const formData = new FormData();
+    formData.append('name', document.getElementById('name').value);
+    formData.append('description', document.getElementById('description').value);
+    formData.append('source', currentTab);
+    formData.append('level', document.getElementById('level').value);
+    if (checkedSubjects.length > 0) formData.append('subjects', checkedSubjects.join(','));
+    const limit = document.getElementById('limit').value;
+    if (limit) formData.append('limit', limit);
+
+    if (currentTab === 'exambank') {
+        const manifest = document.getElementById('manifest').value.trim();
+        const zips = document.getElementById('zipArchives').value.trim();
+        if (manifest) formData.append('manifest', manifest);
+        if (zips) formData.append('zip_archives', zips);
+        if (checkedGrades.length > 0) formData.append('grades', checkedGrades.join(','));
+        formData.append('parse_questions', document.getElementById('parseQuestions').checked ? '1' : '0');
+    }
+
+    try {
+        const resp = await fetch('/api/challenges/import/school-exam', { method: 'POST', body: formData });
+        const { data, text } = await readResponseBody(resp);
+        if (resp.ok) {
+            window.location.href = `/challenges/${data.uuid}`;
+        } else {
+            errorEl.textContent = buildApiErrorMessage(resp, data ?? text, '匯入失敗');
+            errorEl.classList.remove('hidden');
+            submitBtn.disabled = false;
+            submitBtn.textContent = '匯入';
+        }
+    } catch (err) {
+        errorEl.textContent = buildFetchErrorMessage(err);
+        errorEl.classList.remove('hidden');
+        submitBtn.disabled = false;
+        submitBtn.textContent = '匯入';
+    }
+});
+</script>
+{% endblock %}

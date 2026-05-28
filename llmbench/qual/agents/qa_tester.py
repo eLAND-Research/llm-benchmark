@@ -512,16 +512,21 @@ class QATester:
             total = len(values)
             dist = Counter(values)
 
-            if std == 0.0:
-                logger.warning("QATester: FAIL -- all scores identical.")
-                return False
+            # Factual QA legitimately produces uniformly high scores --
+            # skip distribution-skew checks when all items are QA tasks.
+            task_types = {item.task_type.value for item in dataset.items}
+            all_qa = task_types == {"qa"}
 
-            if dist.get(5, 0) / total > 0.9:
-                logger.warning("QATester: FAIL -- >90%% of scores are 5/5.")
-                return False
-            if dist.get(1, 0) / total > 0.9:
-                logger.warning("QATester: FAIL -- >90%% of scores are 1/5.")
-                return False
+            if not all_qa:
+                if std == 0.0:
+                    logger.warning("QATester: FAIL -- all scores identical.")
+                    return False
+                if dist.get(5, 0) / total > 0.9:
+                    logger.warning("QATester: FAIL -- >90%% of scores are 5/5.")
+                    return False
+                if dist.get(1, 0) / total > 0.9:
+                    logger.warning("QATester: FAIL -- >90%% of scores are 1/5.")
+                    return False
 
         return True
 

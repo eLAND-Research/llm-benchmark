@@ -69,6 +69,41 @@ class BenchmarkResponse(BaseModel):
         from_attributes = True
 
 
+class ChallengeCreate(BaseModel):
+    """Schema for creating a challenge."""
+    name: str = Field(..., min_length=1, max_length=255)
+    description: Optional[str] = None
+    task_type: Optional[str] = None
+
+
+class ChallengeListItem(BaseModel):
+    """Lightweight schema for list views."""
+    uuid: str
+    name: str
+    description: Optional[str]
+    task_type: Optional[str]
+    row_count: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ChallengeResponse(BaseModel):
+    """Full challenge response."""
+    uuid: str
+    name: str
+    description: Optional[str]
+    task_type: Optional[str]
+    row_count: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 class ServerCreate(BaseModel):
     """Schema for creating a server config."""
     name: str = Field(..., min_length=1, max_length=255)

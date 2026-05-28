@@ -21,6 +21,9 @@ class TaskType(str, Enum):
     SENTIMENT = "sentiment"
     CLASSIFICATION = "classification"
     QA = "qa"
+    STANCE_ANALYSIS = "stance_analysis"
+    SCHOOL_QA = "school_qa"
+    TRUE_FALSE = "true_false"
 
 
 class SentimentLabel(str, Enum):
@@ -94,6 +97,11 @@ class LLMResponse(BaseModel):
     latency_ms: float
     token_count: int
     error: Optional[str] = None  # populated when the call fails
+    request_messages: List[Dict[str, str]] = Field(default_factory=list)
+    requested_model: Optional[str] = None
+    requested_at: Optional[str] = None
+    finished_at: Optional[str] = None
+    retry_count: int = 0
 
 
 # ---------------------------------------------------------------------------

@@ -1,0 +1,219 @@
+{% extends "base.html" %}
+
+{% block title %}Import Threads Data - LLMBench{% endblock %}
+
+{% block content %}
+<div class="px-4 sm:px-0 max-w-2xl">
+    <div class="mb-6">
+        <a href="/challenges" class="text-sm text-gray-500 hover:text-gray-700">&larr; Back to Challenges</a>
+        <h2 class="text-2xl font-bold text-gray-900 mt-2">Import Threads Scraper Data</h2>
+        <p class="mt-1 text-sm text-gray-500">從 Threads 爬蟲的 JSON 輸出目錄匯入考題資料</p>
+    </div>
+
+    <div class="bg-white shadow rounded-lg p-6">
+        <form id="importForm" class="space-y-6">
+
+            <!-- Challenge name -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700">
+                    Challenge 名稱 <span class="text-red-500">*</span>
+                </label>
+                <input type="text" id="name" required
+                    class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                    placeholder="e.g., Threads AI 貼文 2026Q1">
+            </div>
+
+            <!-- Description -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700">描述</label>
+                <textarea id="description" rows="2"
+                    class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                    placeholder="說明這批資料的來源、時間範圍、主題..."></textarea>
+            </div>
+
+            <!-- Directory -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700">
+                    資料目錄路徑 <span class="text-red-500">*</span>
+                </label>
+                <input type="text" id="directory" required
+                    class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-mono shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                    placeholder="C:/Users/.../threads-scraper/output_reply">
+                <p class="mt-1 text-xs text-gray-500">包含 *.json 爬蟲輸出檔案的目錄</p>
+            </div>
+
+            <!-- Keyword -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700">關鍵字標籤</label>
+                <input type="text" id="keyword"
+                    class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                    placeholder="e.g., AI, 台北">
+                <p class="mt-1 text-xs text-gray-500">用於標記每筆資料的來源關鍵字（不做過濾）</p>
+            </div>
+
+            <!-- Filters: interaction counts -->
+            <div>
+                <p class="text-sm font-medium text-gray-700 mb-2">互動門檻篩選</p>
+                <div class="grid grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600">最低 Like 數</label>
+                        <input type="number" id="min_like_count" value="10" min="0"
+                            class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600">最低留言數</label>
+                        <input type="number" id="min_replies_count" value="5" min="0"
+                            class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600">最低轉貼數</label>
+                        <input type="number" id="min_repost_count" value="1" min="0"
+                            class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                    </div>
+                </div>
+                <p class="mt-1 text-xs text-gray-500">0 = 全部保留</p>
+            </div>
+
+            <!-- Filters: date range -->
+            <div>
+                <p class="text-sm font-medium text-gray-700 mb-2">日期範圍</p>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600">開始日期</label>
+                        <input type="date" id="date_start"
+                            class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600">結束日期</label>
+                        <input type="date" id="date_end"
+                            class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                    </div>
+                </div>
+                <p class="mt-1 text-xs text-gray-500">留空 = 不限日期</p>
+            </div>
+
+            <!-- Filters: text -->
+            <div>
+                <p class="text-sm font-medium text-gray-700 mb-2">內文篩選</p>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600">包含關鍵字</label>
+                        <input type="text" id="text_contains" placeholder="留空 = 不篩選"
+                            class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        <p class="mt-1 text-xs text-gray-500">只保留含此關鍵字的貼文（不分大小寫）</p>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-600">最短文字長度（字元）</label>
+                        <input type="number" id="min_text_length" value="40" min="0"
+                            class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                        <p class="mt-1 text-xs text-gray-500">0 = 全部保留</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Checkboxes -->
+            <div class="space-y-3">
+                <div class="flex items-center gap-3">
+                    <input type="checkbox" id="combine_replies" checked
+                        class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                    <div>
+                        <label for="combine_replies" class="text-sm font-medium text-gray-700">合併留言至主題（建議勾選）</label>
+                        <p class="text-xs text-gray-500">每筆資料包含主題原文＋所有留言，適合立場分析</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3">
+                    <input type="checkbox" id="exclude_emoji_only" checked
+                        class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                    <div>
+                        <label for="exclude_emoji_only" class="text-sm font-medium text-gray-700">排除純表情符號貼文</label>
+                        <p class="text-xs text-gray-500">只有 emoji 沒有文字的貼文不匯入</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3">
+                    <input type="checkbox" id="include_replies"
+                        class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                    <div>
+                        <label for="include_replies" class="text-sm font-medium text-gray-700">每則回覆各自成為一筆資料</label>
+                        <p class="text-xs text-gray-500">不勾選「合併留言」時才有效</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Limit -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700">最大筆數</label>
+                <input type="number" id="limit" placeholder="不限"
+                    class="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                <p class="mt-1 text-xs text-gray-500">留空 = 匯入全部</p>
+            </div>
+
+            <!-- Error -->
+            <div id="errorMsg" class="hidden text-sm text-red-600 bg-red-50 rounded p-3"></div>
+
+            <!-- Buttons -->
+            <div class="flex justify-end space-x-3">
+                <a href="/challenges"
+                    class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50">
+                    取消
+                </a>
+                <button type="submit" id="submitBtn"
+                    class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50">
+                    匯入
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('importForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const errorEl = document.getElementById('errorMsg');
+    const submitBtn = document.getElementById('submitBtn');
+    errorEl.classList.add('hidden');
+    submitBtn.disabled = true;
+    submitBtn.textContent = '匯入中...';
+
+    const formData = new FormData();
+    formData.append('name', document.getElementById('name').value);
+    formData.append('description', document.getElementById('description').value);
+    formData.append('directory', document.getElementById('directory').value);
+    formData.append('keyword', document.getElementById('keyword').value);
+    formData.append('min_like_count', document.getElementById('min_like_count').value || '0');
+    formData.append('min_replies_count', document.getElementById('min_replies_count').value || '0');
+    formData.append('min_repost_count', document.getElementById('min_repost_count').value || '0');
+    formData.append('min_text_length', document.getElementById('min_text_length').value || '0');
+    formData.append('combine_replies', document.getElementById('combine_replies').checked);
+    formData.append('exclude_emoji_only', document.getElementById('exclude_emoji_only').checked);
+    formData.append('include_replies', document.getElementById('include_replies').checked);
+    const dateStart = document.getElementById('date_start').value;
+    if (dateStart) formData.append('date_start', dateStart.replace(/-/g, ''));
+    const dateEnd = document.getElementById('date_end').value;
+    if (dateEnd) formData.append('date_end', dateEnd.replace(/-/g, ''));
+    const textContains = document.getElementById('text_contains').value.trim();
+    if (textContains) formData.append('text_contains', textContains);
+    const limit = document.getElementById('limit').value;
+    if (limit) formData.append('limit', limit);
+
+    try {
+        const resp = await fetch('/api/challenges/import/threads', { method: 'POST', body: formData });
+        const { data, text } = await readResponseBody(resp);
+        if (resp.ok) {
+            window.location.href = `/challenges/${data.uuid}`;
+        } else {
+            errorEl.textContent = buildApiErrorMessage(resp, data ?? text, '匯入失敗');
+            errorEl.classList.remove('hidden');
+            submitBtn.disabled = false;
+            submitBtn.textContent = '匯入';
+        }
+    } catch (err) {
+        errorEl.textContent = buildFetchErrorMessage(err);
+        errorEl.classList.remove('hidden');
+        submitBtn.disabled = false;
+        submitBtn.textContent = '匯入';
+    }
+});
+</script>
+{% endblock %}

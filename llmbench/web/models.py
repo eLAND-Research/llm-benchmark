@@ -227,6 +227,37 @@ class BenchmarkLog(Base):
     )
 
 
+class Challenge(Base):
+    """Challenge (考題) model."""
+
+    __tablename__ = "challenges"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    uuid = Column(String(36), unique=True, nullable=False, index=True)
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    task_type = Column(String(100), nullable=True)  # e.g., QA, Summarization, Translation
+    data_jsonl = Column(Text, nullable=True)  # JSONL content stored as text
+    results_jsonl = Column(Text, nullable=True)  # Generated benchmark items (JSONL)
+    participant_scores_jsonl = Column(Text, nullable=True)  # Accumulated participant scoring results (JSONL, one line per submission)
+    row_count = Column(Integer, default=0, nullable=False)
+    created_at = Column(TIMESTAMP, default=datetime.utcnow, nullable=False)
+    updated_at = Column(TIMESTAMP, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    def to_dict(self):
+        """Convert to dictionary."""
+        return {
+            "id": self.id,
+            "uuid": self.uuid,
+            "name": self.name,
+            "description": self.description,
+            "task_type": self.task_type,
+            "row_count": self.row_count,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
 class Server(Base):
     """Saved server configuration model (optional for v1)."""
 

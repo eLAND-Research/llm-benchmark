@@ -1,10 +1,14 @@
 """Researcher agent -- fetches raw materials from the TDS MCP service.
 
-This agent is a pure Python implementation (no LLM required).  It connects
-to a TDS MCP server via SSE, runs ``easy_search`` for every
-:class:`~llmbench.qual.config.SearchConfig` entry, converts the results into
-:class:`~llmbench.qual.schemas.RawMaterial` objects, deduplicates, and returns
-the collected list.
+This agent is a pure Python implementation (no LLM required).  It supports
+two backends:
+
+1. **SSE-based MCP** (default): connects via ``mcp.client.sse`` to a direct
+   TDS MCP server (``DataSourceConfig.mcp_url``).
+2. **OpView MCP via LiteLLM** (optional): uses HTTPS + Bearer Token when
+   ``DataSourceConfig.opview_mcp`` is configured.
+
+The backend is selected automatically based on the config.
 """
 
 from __future__ import annotations
@@ -12,10 +16,6 @@ from __future__ import annotations
 import json
 import logging
 from typing import Any, Dict, List, Optional
-
-from langchain_mcp_adapters.tools import load_mcp_tools
-from mcp import ClientSession
-from mcp.client.sse import sse_client
 
 from llmbench.qual.config import DataSourceConfig, SearchConfig
 from llmbench.qual.schemas import RawMaterial
@@ -138,17 +138,286 @@ class Researcher:
     # -- public API ---------------------------------------------------------
 
     async def fetch(self) -> List[RawMaterial]:
-        """Connect to TDS MCP, run all configured searches, and return
-        deduplicated :class:`RawMaterial` items.
+        """Fetch raw materials (auto-selects backend by priority).
+
+        Priority: ``challenge`` > ``taiwan_md`` > ``school_qa`` > ``threads``
+                  > ``opview_mcp`` > SSE MCP (``mcp_url``)
 
         Raises
         ------
         ConnectionError
-            If the MCP server is unreachable or the session cannot be
-            established.
+            If the backend is unreachable.
         RuntimeError
-            If the ``easy_search`` tool is not available on the MCP server.
+            If the ``easy_search`` tool is not available.
         """
+        if self.config.challenge is not None:
+            return await self._fetch_via_challenge()
+        if self.config.taiwan_md is not None:
+            return await self._fetch_via_taiwan_md()
+        if self.config.exam_bank is not None:
+            return await self._fetch_via_exam_bank()
+        if self.config.school_qa is not None:
+            return await self._fetch_via_school_qa()
+        if self.config.threads is not None:
+            return await self._fetch_via_threads()
+        if self.config.opview_mcp is not None:
+            return await self._fetch_via_opview_mcp()
+        return await self._fetch_via_sse()
+
+    # -- backend: Challenge JSONL --------------------------------------------
+
+    async def _fetch_via_challenge(self) -> List[RawMaterial]:
+        """Load materials from a challenge's inline JSONL content."""
+        import json as _json
+        cfg = self.config.challenge
+        logger.info("Using Challenge JSONL data source (keyword=%r)", cfg.keyword)
+
+        materials: List[RawMaterial] = []
+        for line in cfg.data_jsonl.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                doc = _json.loads(line)
+            except _json.JSONDecodeError:
+                continue
+
+            text = doc.get("text") or doc.get("content", "")
+            title = doc.get("title", text[:60])
+            if not text:
+                continue
+
+            month = doc.get("month", "")
+            materials.append(RawMaterial(
+                source_category=doc.get("source_category", "challenge"),
+                title=title,
+                content=text,
+                keyword=doc.get("keyword", cfg.keyword),
+                month_range={"start": month, "end": month},
+            ))
+
+        logger.info("Researcher finished (Challenge): %d materials loaded", len(materials))
+        return materials
+
+    # -- backend: Taiwan.md knowledge base -----------------------------------
+
+    async def _fetch_via_taiwan_md(self) -> List[RawMaterial]:
+        """Fetch articles from the Taiwan.md GitHub repository."""
+        import asyncio
+        from llmbench.qual.taiwan_md_source import load_taiwan_md_materials
+
+        cfg = self.config.taiwan_md
+        logger.info(
+            "Using Taiwan.md data source (lang=%s, categories=%s, limit=%s)",
+            cfg.lang, cfg.categories, cfg.limit,
+        )
+        loop = asyncio.get_event_loop()
+        materials = await loop.run_in_executor(
+            None,
+            lambda: load_taiwan_md_materials(
+                categories=cfg.categories,
+                lang=cfg.lang,
+                limit=cfg.limit,
+                timeout=cfg.timeout,
+            ),
+        )
+        logger.info("Researcher finished (Taiwan.md): %d materials loaded", len(materials))
+        return materials
+
+    # -- backend: Exam Bank (PDF download + parse) ---------------------------
+
+    async def _fetch_via_exam_bank(self) -> List[RawMaterial]:
+        """Download exam PDFs from manifest/zips and extract text."""
+        import asyncio
+        from llmbench.qual.exam_bank_source import load_exam_bank_materials
+
+        cfg = self.config.exam_bank
+        logger.info(
+            "Using Exam Bank data source (level=%s, subjects=%s, manifest=%s, zips=%s)",
+            cfg.level, cfg.subjects, cfg.manifest, cfg.zip_archives,
+        )
+        loop = asyncio.get_event_loop()
+        materials = await loop.run_in_executor(
+            None,
+            lambda: load_exam_bank_materials(
+                manifest=cfg.manifest,
+                zip_archives=cfg.zip_archives,
+                level=cfg.level,
+                subjects=cfg.subjects,
+                grades=cfg.grades,
+                cache_dir=cfg.cache_dir,
+                limit=cfg.limit,
+                download_timeout=cfg.download_timeout,
+                max_download_workers=cfg.max_download_workers,
+                parse_questions=cfg.parse_questions,
+            ),
+        )
+        logger.info("Researcher finished (Exam Bank): %d materials loaded", len(materials))
+        return materials
+
+    # -- backend: School QA (國小/國中 curriculum) ----------------------------
+
+    async def _fetch_via_school_qa(self) -> List[RawMaterial]:
+        """Load built-in or custom curriculum materials for school QA."""
+        import asyncio
+        from llmbench.qual.school_qa_source import load_school_qa_materials
+
+        cfg = self.config.school_qa
+        logger.info(
+            "Using School QA data source (level=%s, subjects=%s, limit=%s)",
+            cfg.level, cfg.subjects, cfg.limit,
+        )
+        loop = asyncio.get_event_loop()
+        materials = await loop.run_in_executor(
+            None,
+            lambda: load_school_qa_materials(
+                level=cfg.level,
+                subjects=cfg.subjects,
+                data_jsonl=cfg.data_jsonl,
+                limit=cfg.limit,
+            ),
+        )
+        logger.info("Researcher finished (School QA): %d materials loaded", len(materials))
+        return materials
+
+    # -- backend: Threads local files ----------------------------------------
+
+    async def _fetch_via_threads(self) -> List[RawMaterial]:
+        """Load materials from one or more local Threads scraper directories."""
+        import asyncio
+        from llmbench.qual.threads_source import load_threads_materials
+
+        all_materials: List[RawMaterial] = []
+        loop = asyncio.get_event_loop()
+
+        for cfg in self.config.threads:
+            logger.info(
+                "Using Threads local data source at %s (keyword=%r, limit=%s)",
+                cfg.directory, cfg.keyword, cfg.limit,
+            )
+            materials = await loop.run_in_executor(
+                None,
+                lambda c=cfg: load_threads_materials(
+                    directory=c.directory,
+                    keyword=c.keyword,
+                    include_replies=c.include_replies,
+                    combine_replies=c.combine_replies,
+                    min_like_count=c.min_like_count,
+                    min_replies_count=c.min_replies_count,
+                    min_repost_count=c.min_repost_count,
+                    date_start=c.date_start,
+                    date_end=c.date_end,
+                    text_contains=c.text_contains,
+                    min_text_length=c.min_text_length,
+                    exclude_emoji_only=c.exclude_emoji_only,
+                    limit=c.limit,
+                ),
+            )
+            all_materials.extend(materials)
+
+        logger.info("Researcher finished (Threads): %d materials total", len(all_materials))
+        return all_materials
+
+    # -- backend: OpView MCP (LiteLLM proxy) --------------------------------
+
+    async def _fetch_via_opview_mcp(self) -> List[RawMaterial]:
+        """Fetch using OpView MCP via LiteLLM proxy."""
+        import asyncio
+        from llmbench.qual.opview_mcp import OpViewMCPClient
+
+        cfg = self.config.opview_mcp
+        client = OpViewMCPClient(
+            base_url=cfg.litellm_url,
+            api_key=cfg.litellm_api_key,
+            mcp_alias=cfg.mcp_alias,
+            timeout=cfg.timeout,
+        )
+
+        logger.info(
+            "Using OpView MCP backend at %s (alias=%s)",
+            cfg.litellm_url,
+            cfg.mcp_alias,
+        )
+
+        all_materials: List[RawMaterial] = []
+        loop = asyncio.get_event_loop()
+
+        for idx, search in enumerate(self.config.searches, 1):
+            logger.info(
+                "[%d/%d] Searching categories=%s keyword=%r top_k=%d (OpView MCP)",
+                idx,
+                len(self.config.searches),
+                search.categories,
+                search.keyword,
+                search.top_k,
+            )
+            try:
+                # OpViewMCPClient is synchronous; run in executor to avoid blocking
+                result = await loop.run_in_executor(
+                    None,
+                    lambda s=search: client.easy_search(
+                        categories=s.categories,
+                        keyword=s.keyword,
+                        top_k=s.top_k,
+                        month_range=s.month_range,
+                        sort_by=s.sort_by if s.sort_by else None,
+                    ),
+                )
+            except Exception as exc:
+                logger.warning(
+                    "[%d/%d] OpView MCP easy_search failed for keyword=%r: %s",
+                    idx,
+                    len(self.config.searches),
+                    search.keyword,
+                    exc,
+                )
+                continue
+
+            # easy_search returns items in result["items"]
+            items = result.get("items", [])
+            summary = result.get("summary", {})
+            logger.info(
+                "[%d/%d] Results -- total_count=%s valid_count=%s query_time=%.2fs",
+                idx,
+                len(self.config.searches),
+                summary.get("total_count", "?"),
+                summary.get("valid_count", "?"),
+                summary.get("query_time", 0),
+            )
+
+            month_range = search.month_range or {"start": "", "end": ""}
+            source_category = ",".join(search.categories)
+            for doc in items:
+                title = doc.get("title") or ""
+                content = doc.get("content", "")
+                if not title and not content:
+                    continue
+                all_materials.append(
+                    RawMaterial(
+                        source_category=source_category,
+                        title=title,
+                        content=content,
+                        keyword=search.keyword,
+                        month_range=month_range,
+                    )
+                )
+
+        deduped = self._deduplicate(all_materials)
+        logger.info(
+            "Researcher finished (OpView MCP): %d collected, %d after dedup.",
+            len(all_materials),
+            len(deduped),
+        )
+        return deduped
+
+    # -- backend: SSE MCP (original) -----------------------------------------
+
+    async def _fetch_via_sse(self) -> List[RawMaterial]:
+        """Fetch using the original SSE-based MCP server."""
+        from langchain_mcp_adapters.tools import load_mcp_tools
+        from mcp import ClientSession
+        from mcp.client.sse import sse_client
+
         all_materials: List[RawMaterial] = []
 
         logger.info(
@@ -186,8 +455,6 @@ class Researcher:
             )
             raise
         except Exception as exc:
-            # Re-raise RuntimeError (our own) as-is; wrap anything else
-            # that is not already a ConnectionError / RuntimeError.
             if isinstance(exc, (RuntimeError, ConnectionError)):
                 raise
             logger.error("Unexpected error during MCP fetch: %s", exc)
@@ -195,15 +462,12 @@ class Researcher:
                 f"MCP communication failure: {exc}"
             ) from exc
 
-        # Deduplicate
         deduped = self._deduplicate(all_materials)
-
         logger.info(
-            "Researcher finished: %d raw materials collected, %d after dedup.",
+            "Researcher finished (SSE MCP): %d collected, %d after dedup.",
             len(all_materials),
             len(deduped),
         )
-
         return deduped
 
     # -- private helpers ----------------------------------------------------

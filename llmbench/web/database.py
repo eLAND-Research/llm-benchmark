@@ -38,6 +38,14 @@ async def init_db():
     """Initialize database tables."""
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # Add new columns to existing databases (SQLite doesn't support IF NOT EXISTS for columns)
+        for sql in [
+            "ALTER TABLE challenges ADD COLUMN results_jsonl TEXT",
+        ]:
+            try:
+                await conn.execute(__import__("sqlalchemy").text(sql))
+            except Exception:
+                pass  # Column already exists
 
 
 async def drop_db():

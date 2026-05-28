@@ -17,6 +17,7 @@ from __future__ import annotations
 import logging
 import uuid
 from datetime import datetime
+from pathlib import Path
 from typing import List
 
 from .agents.designer import Designer
@@ -74,8 +75,9 @@ async def run_qual_pipeline(config: QualConfig) -> QualRunResult:
     """
     run_id = str(uuid.uuid4())
 
-    # Initialise DB
-    db = QualDB(config.db_path)
+    # Resolve db_path to absolute so aiosqlite worker thread can find it
+    db_path = str(Path(config.db_path).resolve())
+    db = QualDB(db_path)
     await db.init()
     await db.create_run(run_id, config.model_dump_json(), "running")
 
@@ -95,7 +97,10 @@ async def run_qual_pipeline(config: QualConfig) -> QualRunResult:
 
         # Phase 3: Implement -----------------------------------------------
         logger.info("=== Phase 3: Implement (Executor + Judge) ===")
-        executor = Executor(config.models_under_test)
+        executor = Executor(
+            config.models_under_test,
+            max_concurrent=config.executor_max_concurrent,
+        )
         responses = await executor.run(dataset)
         await db.save_responses(run_id, responses)
         logger.info("Executor done: %d LLM responses collected", len(responses))
@@ -212,7 +217,10 @@ async def run_execute(
     logger.info("=== run_execute: Phases 1 + 2 + 3a ===")
     dataset = await run_design(config)
 
-    executor = Executor(config.models_under_test)
+    executor = Executor(
+        config.models_under_test,
+        max_concurrent=config.executor_max_concurrent,
+    )
     responses = await executor.run(dataset)
     logger.info("run_execute: %d LLM responses collected", len(responses))
     return dataset, responses

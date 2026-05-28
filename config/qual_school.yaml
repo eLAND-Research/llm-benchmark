@@ -1,0 +1,56 @@
+qual:
+  # === 資料來源（擇一使用）===
+
+  # --- 選項 A：直接從 PDF 題庫匯入（parse_questions=true = 直接取題，不走 LLM）---
+  # data_source:
+  #   exam_bank:
+  #     zip_archives:
+  #       - "data/exam_bank/raw_archives/jingwen_105_108.zip"
+  #     manifest: "data/exam_bank/manifests/elementary_exam_links.csv"
+  #     level: "both"
+  #     subjects: ["國文", "數學", "英語"]
+  #     grades: ["5", "6"]
+  #     cache_dir: "data/exam_bank/pdf_cache"
+  #     limit: 20
+  #     parse_questions: true   # true = 直接解析選擇題（不給文章、不走 Designer LLM）
+  #                              # false = PDF 全文作為文章素材，由 Designer LLM 出題
+
+  # --- 選項 B：使用內建課綱知識庫 ---
+  data_source:
+    school_qa:
+      # "elementary"（國小）、"middle_school"（國中）或 "both"（全部）
+      level: "both"
+
+      # 指定科目（留空或刪除此行 = 所有科目）
+      # subjects: ["數學", "理化", "生物"]
+
+      # 自訂 JSONL 題庫路徑（留空則使用內建課綱材料）
+      # data_jsonl: "data/my_school_qa.jsonl"
+
+      # 最多載入幾筆材料（留空 = 全部）
+      limit: 20
+
+  # === 題型設定（school_qa = 選擇題/填充題/問答題）===
+  task_types:
+    - "school_qa"
+  items_per_task: 10   # 每種題型抽取幾筆材料（每筆材料產生 3 道題目）
+
+  # === 待測模型 ===
+  models_under_test:
+    - name: "gpt-oss-20b"
+      base_url: "https://llmgw.elandai.cloud/v1"
+      api_key: "env:LITELLM_API_KEY"
+      model: "gpt-oss-20b"
+
+  # === Judge 設定 ===
+  judge:
+    model:
+      name: "judge"
+      base_url: "https://llmgw.elandai.cloud/v1"
+      api_key: "env:LITELLM_API_KEY"
+      model: "gpt-oss-20b"
+    max_concurrent: 5
+
+  # === 輸出設定 ===
+  output_dir: "results/qual_school"
+  db_path: "llmbench_qual.db"
