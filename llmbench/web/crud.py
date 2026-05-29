@@ -312,8 +312,22 @@ class ChallengeCRUD:
         limit: int = 50,
         offset: int = 0,
     ) -> List[Challenge]:
-        """List challenges with optional filter."""
-        query = select(Challenge).order_by(Challenge.created_at.desc())
+        """List challenges with optional filter.
+
+        Defer the huge text columns (data_jsonl, results_jsonl,
+        participant_scores_jsonl) so the list page doesn't pull
+        hundreds of MB on every request.
+        """
+        from sqlalchemy.orm import defer
+        query = (
+            select(Challenge)
+            .options(
+                defer(Challenge.data_jsonl),
+                defer(Challenge.results_jsonl),
+                defer(Challenge.participant_scores_jsonl),
+            )
+            .order_by(Challenge.created_at.desc())
+        )
         if task_type:
             query = query.where(Challenge.task_type == task_type)
         query = query.limit(limit).offset(offset)
