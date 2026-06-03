@@ -4,74 +4,254 @@
 
 {% block content %}
 <div class="px-4 sm:px-0">
-    <h2 class="text-2xl font-bold text-gray-900 mb-6">All Benchmarks ({{ total }})</h2>
-
-    <!-- Filters -->
-    <div class="bg-white shadow rounded-lg p-4 mb-6">
-        <form method="get" class="flex items-center space-x-4">
-            <select name="status" class="rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
-                <option value="">All Statuses</option>
-                <option value="pending" {% if current_status == 'pending' %}selected{% endif %}>Pending</option>
-                <option value="running" {% if current_status == 'running' %}selected{% endif %}>Running</option>
-                <option value="completed" {% if current_status == 'completed' %}selected{% endif %}>Completed</option>
-                <option value="failed" {% if current_status == 'failed' %}selected{% endif %}>Failed</option>
-            </select>
-            <button type="submit" class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700">
-                Filter
-            </button>
-        </form>
+    <div class="flex items-baseline justify-between mb-6">
+        <h2 class="text-2xl font-bold text-gray-900">Benchmarks</h2>
+        <p class="text-sm text-gray-500">Challenge 測試紀錄與 Inference Benchmark 一覽</p>
     </div>
 
-    <!-- Benchmarks Table -->
-    <div class="bg-white shadow rounded-lg overflow-hidden">
-        <table class="min-w-full divide-y divide-gray-200">
-            <thead class="bg-gray-50">
-                <tr>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Runtime</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                </tr>
-            </thead>
-            <tbody class="bg-white divide-y divide-gray-200">
-                {% for benchmark in benchmarks %}
-                <tr>
-                    <td class="px-6 py-4">
-                        <div class="text-sm font-medium text-gray-900">{{ benchmark.name }}</div>
-                        {% if benchmark.description %}
-                        <div class="text-sm text-gray-500">{{ benchmark.description[:50] }}...</div>
-                        {% endif %}
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap">
-                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full
-                            {% if benchmark.status == 'completed' %}bg-green-100 text-green-800
-                            {% elif benchmark.status == 'running' %}bg-blue-100 text-blue-800
-                            {% elif benchmark.status == 'failed' %}bg-red-100 text-red-800
-                            {% else %}bg-gray-100 text-gray-800{% endif %}">
-                            {{ benchmark.status }}
-                        </span>
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {% if benchmark.runtime_sec %}{{ "%.2f"|format(benchmark.runtime_sec) }}s{% else %}-{% endif %}
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {{ benchmark.created_at.strftime('%Y-%m-%d %H:%M') }}
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
-                        <a href="/benchmarks/{{ benchmark.uuid }}" class="text-indigo-600 hover:text-indigo-900">View</a>
-                        <a href="/api/benchmarks/{{ benchmark.uuid }}/export?format=json" class="text-green-600 hover:text-green-900">Export</a>
-                    </td>
-                </tr>
-                {% else %}
-                <tr>
-                    <td colspan="5" class="px-6 py-8 text-center text-sm text-gray-500">
-                        No benchmarks found.
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+    <!-- Filter / search -->
+    <div class="bg-white shadow-sm rounded-lg border border-gray-200 p-4 mb-6 flex flex-wrap items-center gap-3">
+        <input type="text" id="searchInput" placeholder="搜尋 Challenge 或模型名稱…"
+            class="flex-1 min-w-[200px] rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-sm px-3 py-2 border"
+            oninput="renderTestRuns()">
+        <select id="sortSelect" onchange="renderTestRuns()"
+            class="rounded-md border-gray-300 shadow-sm text-sm px-3 py-2 border">
+            <option value="latest">最新優先</option>
+            <option value="oldest">最舊優先</option>
+            <option value="score_desc">分數高→低</option>
+            <option value="score_asc">分數低→高</option>
+            <option value="count_desc">題數最多</option>
+        </select>
+        <button onclick="document.getElementById('groupByChallenge').classList.toggle('hidden'); document.getElementById('flatList').classList.toggle('hidden'); toggleGroupBtn.textContent = toggleGroupBtn.textContent.includes('分組') ? '依時間排列' : '按 Challenge 分組';" id="toggleGroupBtn"
+            class="px-3 py-2 text-sm font-medium rounded-md border border-gray-300 text-gray-700 bg-white hover:bg-gray-50">
+            按 Challenge 分組
+        </button>
     </div>
+
+    <!-- Test Runs (cards) -->
+    <div id="testRunsLoading" class="text-center py-12 text-sm text-gray-400">載入中…</div>
+    <div id="testRunsEmpty" class="hidden bg-white rounded-lg border border-gray-200 p-12 text-center text-sm text-gray-500">
+        尚無測試紀錄。先到 <a href="/challenges" class="text-indigo-600 hover:underline">Challenges</a> 生成題目並測試模型。
+    </div>
+
+    <!-- Flat list (default) -->
+    <div id="flatList" class="space-y-3"></div>
+
+    <!-- Grouped by challenge (hidden by default) -->
+    <div id="groupByChallenge" class="hidden space-y-6"></div>
+
+    <!-- Legacy Inference Benchmarks (collapsible at bottom) -->
+    {% if benchmarks %}
+    <details class="mt-10 bg-white rounded-lg shadow-sm border border-gray-200">
+        <summary class="px-6 py-4 cursor-pointer text-sm font-medium text-gray-700 hover:bg-gray-50">
+            Inference Benchmarks ({{ total }}) — 點開查看 YAML 設定的效能測試
+        </summary>
+        <div class="border-t border-gray-200">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Runtime</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    {% for benchmark in benchmarks %}
+                    <tr>
+                        <td class="px-6 py-4">
+                            <div class="text-sm font-medium text-gray-900">{{ benchmark.name }}</div>
+                            {% if benchmark.description %}
+                            <div class="text-sm text-gray-500">{{ benchmark.description[:50] }}...</div>
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap">
+                            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full
+                                {% if benchmark.status == 'completed' %}bg-green-100 text-green-800
+                                {% elif benchmark.status == 'running' %}bg-blue-100 text-blue-800
+                                {% elif benchmark.status == 'failed' %}bg-red-100 text-red-800
+                                {% else %}bg-gray-100 text-gray-800{% endif %}">
+                                {{ benchmark.status }}
+                            </span>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {% if benchmark.runtime_sec %}{{ "%.2f"|format(benchmark.runtime_sec) }}s{% else %}-{% endif %}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {{ benchmark.created_at.strftime('%Y-%m-%d %H:%M') }}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">
+                            <a href="/benchmarks/{{ benchmark.uuid }}" class="text-indigo-600 hover:text-indigo-900">View</a>
+                            <a href="/api/benchmarks/{{ benchmark.uuid }}/export?format=json" class="text-green-600 hover:text-green-900">Export</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </details>
+    {% endif %}
 </div>
+
+<script>
+let _allRuns = [];
+
+function _escHtml(s) {
+    return (s == null ? '' : String(s))
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function _fmtTs(iso) {
+    if (!iso) return '-';
+    const d = new Date(iso);
+    if (isNaN(d)) return iso;
+    return d.toLocaleString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+}
+
+function _relTime(iso) {
+    if (!iso) return '-';
+    const d = new Date(iso);
+    if (isNaN(d)) return iso;
+    const diffMs = Date.now() - d.getTime();
+    const sec = Math.floor(diffMs / 1000);
+    if (sec < 60) return `${sec} 秒前`;
+    const min = Math.floor(sec / 60);
+    if (min < 60) return `${min} 分鐘前`;
+    const hr = Math.floor(min / 60);
+    if (hr < 24) return `${hr} 小時前`;
+    const day = Math.floor(hr / 24);
+    if (day < 30) return `${day} 天前`;
+    return d.toLocaleDateString('zh-TW');
+}
+
+function _scoreColor(score) {
+    if (score == null) return 'bg-gray-100 text-gray-500';
+    if (score >= 4) return 'bg-green-100 text-green-800';
+    if (score >= 3) return 'bg-yellow-100 text-yellow-800';
+    return 'bg-red-100 text-red-800';
+}
+
+function _runCard(r) {
+    const score = r.avg_score == null ? '-' : Number(r.avg_score).toFixed(2);
+    const scoreCls = _scoreColor(r.avg_score);
+    const errBadge = r.errors > 0
+        ? `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700">${r.errors} 錯誤</span>`
+        : '';
+    const taskType = r.challenge_task_type
+        ? `<span class="inline-flex items-center px-2 py-0.5 rounded text-xs bg-blue-100 text-blue-700">${_escHtml(r.challenge_task_type)}</span>`
+        : '';
+    return `
+    <a href="/challenges/${_escHtml(r.challenge_uuid)}" class="block bg-white rounded-lg border border-gray-200 hover:border-indigo-400 hover:shadow-md transition p-4">
+        <div class="flex items-start justify-between gap-4">
+            <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-2 flex-wrap">
+                    <span class="text-base font-semibold text-gray-900 truncate">${_escHtml(r.challenge_name)}</span>
+                    ${taskType}
+                </div>
+                <div class="mt-1 text-sm text-gray-600">
+                    <span class="font-medium text-purple-700">${_escHtml(r.model_name)}</span>
+                    <span class="text-gray-400">·</span>
+                    <span>${r.count} 題</span>
+                    ${errBadge ? '<span class="text-gray-400">·</span>' + errBadge : ''}
+                </div>
+                <div class="mt-1 text-xs text-gray-400">${_fmtTs(r.finished_at)} (${_relTime(r.finished_at)})</div>
+            </div>
+            <div class="flex-shrink-0 text-right">
+                <div class="text-xs text-gray-500">平均分</div>
+                <div class="inline-flex items-center justify-center px-3 py-1 rounded-full text-base font-bold ${scoreCls}">${score}</div>
+            </div>
+        </div>
+    </a>`;
+}
+
+function _filterRuns(runs) {
+    const q = document.getElementById('searchInput').value.trim().toLowerCase();
+    if (!q) return runs;
+    return runs.filter(r => (r.challenge_name || '').toLowerCase().includes(q) || (r.model_name || '').toLowerCase().includes(q));
+}
+
+function _sortRuns(runs) {
+    const mode = document.getElementById('sortSelect').value;
+    const out = [...runs];
+    const ts = r => r.finished_at ? new Date(r.finished_at).getTime() : 0;
+    const sc = r => r.avg_score == null ? -1 : Number(r.avg_score);
+    switch (mode) {
+        case 'latest':     out.sort((a, b) => ts(b) - ts(a)); break;
+        case 'oldest':     out.sort((a, b) => ts(a) - ts(b)); break;
+        case 'score_desc': out.sort((a, b) => sc(b) - sc(a)); break;
+        case 'score_asc':  out.sort((a, b) => sc(a) - sc(b)); break;
+        case 'count_desc': out.sort((a, b) => (b.count || 0) - (a.count || 0)); break;
+    }
+    return out;
+}
+
+function renderTestRuns() {
+    const runs = _sortRuns(_filterRuns(_allRuns));
+    const flatEl = document.getElementById('flatList');
+    const groupEl = document.getElementById('groupByChallenge');
+
+    // Flat list
+    flatEl.innerHTML = runs.map(_runCard).join('') || '<p class="text-center text-sm text-gray-400 py-8">沒有符合的紀錄。</p>';
+
+    // Grouped by challenge
+    const byChallenge = {};
+    runs.forEach(r => {
+        const key = r.challenge_uuid;
+        if (!byChallenge[key]) byChallenge[key] = { name: r.challenge_name, task_type: r.challenge_task_type, uuid: r.challenge_uuid, runs: [] };
+        byChallenge[key].runs.push(r);
+    });
+    groupEl.innerHTML = Object.values(byChallenge).map(g => {
+        const avg = g.runs.filter(r => r.avg_score != null).reduce((a, r) => a + Number(r.avg_score), 0) / (g.runs.filter(r => r.avg_score != null).length || 1);
+        const avgStr = isFinite(avg) ? avg.toFixed(2) : '-';
+        return `
+        <div class="bg-white rounded-lg border border-gray-200">
+            <div class="px-5 py-3 border-b border-gray-200 flex items-center justify-between">
+                <div>
+                    <a href="/challenges/${_escHtml(g.uuid)}" class="text-base font-semibold text-gray-900 hover:text-indigo-700">${_escHtml(g.name)}</a>
+                    ${g.task_type ? `<span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs bg-blue-100 text-blue-700">${_escHtml(g.task_type)}</span>` : ''}
+                </div>
+                <div class="text-sm text-gray-500">${g.runs.length} 次測試 · 平均分 <span class="font-semibold text-gray-800">${avgStr}</span></div>
+            </div>
+            <div class="divide-y divide-gray-100">
+                ${g.runs.map(r => {
+                    const score = r.avg_score == null ? '-' : Number(r.avg_score).toFixed(2);
+                    const scoreCls = _scoreColor(r.avg_score);
+                    const errBadge = r.errors > 0 ? `<span class="text-red-600 text-xs ml-2">${r.errors} 錯誤</span>` : '';
+                    return `<div class="px-5 py-3 flex items-center justify-between hover:bg-gray-50">
+                        <div>
+                            <span class="font-medium text-purple-700">${_escHtml(r.model_name)}</span>
+                            <span class="text-gray-400 mx-1">·</span>
+                            <span class="text-sm text-gray-600">${r.count} 題</span>
+                            ${errBadge}
+                            <span class="text-xs text-gray-400 ml-2">${_relTime(r.finished_at)}</span>
+                        </div>
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-sm font-semibold ${scoreCls}">${score}</span>
+                    </div>`;
+                }).join('')}
+            </div>
+        </div>`;
+    }).join('') || '<p class="text-center text-sm text-gray-400 py-8">沒有符合的紀錄。</p>';
+}
+
+async function loadTestRuns() {
+    const loadingEl = document.getElementById('testRunsLoading');
+    const emptyEl = document.getElementById('testRunsEmpty');
+    try {
+        const resp = await fetch('/api/test-runs');
+        const data = await resp.json();
+        _allRuns = data.runs || [];
+        loadingEl.classList.add('hidden');
+        if (_allRuns.length === 0) {
+            emptyEl.classList.remove('hidden');
+            return;
+        }
+        renderTestRuns();
+    } catch (err) {
+        loadingEl.textContent = '載入失敗：' + err.message;
+        loadingEl.className = 'text-center py-12 text-sm text-red-600';
+    }
+}
+loadTestRuns();
+</script>
 {% endblock %}

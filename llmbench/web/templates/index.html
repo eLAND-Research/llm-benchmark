@@ -130,6 +130,7 @@
             </table>
         </div>
     </div>
+
 </div>
 
 <script>
@@ -158,46 +159,92 @@ function formatDate(isoString) {
     return date.toLocaleDateString();
 }
 
-// Load dashboard stats
+// Score badge color
+function scoreColor(s) {
+    if (s == null) return 'bg-gray-100 text-gray-500';
+    if (s >= 4) return 'bg-green-100 text-green-800';
+    if (s >= 3) return 'bg-yellow-100 text-yellow-800';
+    return 'bg-red-100 text-red-800';
+}
+
+function escHtml(s) {
+    return (s == null ? '' : String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// Load merged dashboard stats and recent items
 async function loadStats() {
     try {
-        const response = await fetch('/api/stats');
-        const data = await response.json();
+        const [statsResp, runsResp] = await Promise.all([
+            fetch('/api/stats'),
+            fetch('/api/test-runs'),
+        ]);
+        const stats = await statsResp.json();
+        const runsData = await runsResp.json();
+        const runs = runsData.runs || [];
 
-        // Update stats
-        document.getElementById('stat-total').textContent = data.total_benchmarks;
-        document.getElementById('stat-running').textContent = data.running_count;
-        document.getElementById('stat-completed').textContent = data.completed_count;
-        document.getElementById('stat-failed').textContent = data.failed_count;
+        // Stats: include test runs in totals
+        const totalAll = (stats.total_benchmarks || 0) + runs.length;
+        const completedAll = (stats.completed_count || 0) + runs.length;  // test runs are always "completed"
+        document.getElementById('stat-total').textContent = totalAll;
+        document.getElementById('stat-running').textContent = stats.running_count || 0;
+        document.getElementById('stat-completed').textContent = completedAll;
+        document.getElementById('stat-failed').textContent = stats.failed_count || 0;
 
-        // Update recent benchmarks table
-        const tbody = document.getElementById('recent-benchmarks');
-        if (data.recent_benchmarks.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" class="px-6 py-4 text-center text-sm text-gray-500">No benchmarks yet. Create your first benchmark!</td></tr>';
-        } else {
-            tbody.innerHTML = data.recent_benchmarks.map(b => `
-                <tr>
+        // Merge recent benchmarks + test runs (by timestamp), keep top 8
+        const benchmarkRows = (stats.recent_benchmarks || []).map(b => ({
+            kind: 'benchmark',
+            ts: b.created_at,
+            html: `<tr>
+                <td class="px-6 py-4 whitespace-nowrap">
+                    <div class="text-sm font-medium text-gray-900">${escHtml(b.name)}</div>
+                    <div class="text-xs text-gray-500">${b.uuid.substring(0, 8)}</div>
+                </td>
+                <td class="px-6 py-4 whitespace-nowrap">${getStatusBadge(b.status)}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${formatDate(b.created_at)}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${b.runtime_sec ? b.runtime_sec.toFixed(2) + 's' : '-'}</td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <a href="/benchmarks/${b.uuid}" class="text-indigo-600 hover:text-indigo-900">View</a>
+                </td>
+            </tr>`
+        }));
+
+        const runRows = runs.map(r => {
+            const score = r.avg_score == null ? '-' : Number(r.avg_score).toFixed(2);
+            const cls = scoreColor(r.avg_score);
+            const runtime = (r.started_at && r.finished_at)
+                ? ((new Date(r.finished_at) - new Date(r.started_at)) / 1000).toFixed(2) + 's' : '-';
+            const statusBadge = r.errors > 0
+                ? `<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">completed (${r.errors} err)</span>`
+                : `<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">completed</span>`;
+            return {
+                kind: 'testrun',
+                ts: r.finished_at,
+                html: `<tr class="bg-indigo-50/30">
                     <td class="px-6 py-4 whitespace-nowrap">
-                        <div class="text-sm font-medium text-gray-900">${b.name}</div>
-                        <div class="text-sm text-gray-500">${b.uuid.substring(0, 8)}</div>
+                        <div class="text-sm font-medium text-gray-900">${escHtml(r.challenge_name)} <span class="text-xs text-indigo-600 font-normal">[Challenge]</span></div>
+                        <div class="text-xs text-gray-500">${escHtml(r.model_name)} · ${r.count} 題 · 平均分 <span class="inline-flex items-center px-1.5 rounded ${cls}">${score}</span></div>
                     </td>
-                    <td class="px-6 py-4 whitespace-nowrap">
-                        ${getStatusBadge(b.status)}
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        ${formatDate(b.created_at)}
-                    </td>
-                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        ${b.runtime_sec ? b.runtime_sec.toFixed(2) + 's' : '-'}
-                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">${statusBadge}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${formatDate(r.finished_at)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${runtime}</td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <a href="/benchmarks/${b.uuid}" class="text-indigo-600 hover:text-indigo-900">View</a>
+                        <a href="/challenges/${escHtml(r.challenge_uuid)}" class="text-indigo-600 hover:text-indigo-900">View</a>
                     </td>
-                </tr>
-            `).join('');
+                </tr>`
+            };
+        });
+
+        const merged = [...benchmarkRows, ...runRows]
+            .sort((a, b) => new Date(b.ts || 0) - new Date(a.ts || 0))
+            .slice(0, 8);
+
+        const tbody = document.getElementById('recent-benchmarks');
+        if (merged.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="px-6 py-4 text-center text-sm text-gray-500">尚無測試紀錄。到 <a href="/challenges" class="text-indigo-600 hover:underline">Challenges</a> 生成題目並測試模型。</td></tr>';
+        } else {
+            tbody.innerHTML = merged.map(m => m.html).join('');
         }
 
-        // Update last updated time
         document.getElementById('last-updated').textContent = 'Updated ' + new Date().toLocaleTimeString();
     } catch (error) {
         console.error('Failed to load stats:', error);
@@ -207,7 +254,7 @@ async function loadStats() {
 // Load on page load
 loadStats();
 
-// Auto-refresh every 5 seconds
-setInterval(loadStats, 5000);
+// Auto-refresh every 60 seconds (test runs aggregation is heavy on big DBs)
+setInterval(loadStats, 60000);
 </script>
 {% endblock %}

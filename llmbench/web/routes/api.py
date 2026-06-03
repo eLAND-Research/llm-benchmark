@@ -25,7 +25,7 @@ from ..schemas import (
     ChallengeResponse,
     ChallengeListItem,
 )
-from ..models import Benchmark
+from ..models import Benchmark, Challenge
 from ..tasks import run_benchmark_task
 
 router = APIRouter()
@@ -699,6 +699,102 @@ async def get_dashboard_stats(db: AsyncSession = Depends(get_db)):
             for b in recent
         ],
     }
+
+
+# Simple in-memory cache for /test-runs (TTL 60 seconds).
+# Parsing all results_jsonl can take >10 seconds on large DBs, so we cache.
+_test_runs_cache: dict = {"data": None, "expires_at": 0.0}
+
+
+@router.get("/test-runs")
+async def list_test_runs(db: AsyncSession = Depends(get_db)):
+    """Aggregate challenge test history from results_jsonl into per-run records.
+
+    Groups rows by (challenge_uuid, model_name, hour-bucket) so each "run"
+    corresponds to one generate/test session. Result cached 60 seconds.
+    """
+    import time
+    from sqlalchemy import select
+    from sqlalchemy.orm import defer
+    from collections import defaultdict
+
+    # Serve from cache if still fresh
+    now = time.monotonic()
+    if _test_runs_cache["data"] is not None and _test_runs_cache["expires_at"] > now:
+        return _test_runs_cache["data"]
+    from datetime import datetime
+
+    # Only load uuid, name, results_jsonl — defer other heavy text columns
+    query = (
+        select(Challenge)
+        .options(
+            defer(Challenge.data_jsonl),
+            defer(Challenge.participant_scores_jsonl),
+        )
+        .order_by(Challenge.updated_at.desc())
+    )
+    result = await db.execute(query)
+    challenges = list(result.scalars().all())
+
+    runs: list[dict] = []
+    for ch in challenges:
+        if not ch.results_jsonl:
+            continue
+        # Group rows by (model_name, hour_bucket)
+        groups: dict[tuple, dict] = defaultdict(
+            lambda: {"count": 0, "scores": [], "first_ts": None, "last_ts": None, "errors": 0}
+        )
+        for line in ch.results_jsonl.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                row = json.loads(line)
+            except Exception:
+                continue
+            model_name = row.get("model_name") or row.get("model") or "unknown"
+            ts_raw = row.get("finished_at") or row.get("requested_at") or ""
+            try:
+                ts = datetime.fromisoformat(ts_raw.replace("Z", "+00:00")) if ts_raw else None
+            except Exception:
+                ts = None
+            # Hour bucket → group rows generated within the same hour
+            bucket = ts.strftime("%Y-%m-%d %H") if ts else "unknown"
+            key = (model_name, bucket)
+            g = groups[key]
+            g["count"] += 1
+            if isinstance(row.get("score"), (int, float)):
+                g["scores"].append(float(row["score"]))
+            if row.get("response_error"):
+                g["errors"] += 1
+            if ts:
+                if g["first_ts"] is None or ts < g["first_ts"]:
+                    g["first_ts"] = ts
+                if g["last_ts"] is None or ts > g["last_ts"]:
+                    g["last_ts"] = ts
+
+        for (model_name, bucket), g in groups.items():
+            avg = round(sum(g["scores"]) / len(g["scores"]), 3) if g["scores"] else None
+            runs.append({
+                "challenge_uuid": ch.uuid,
+                "challenge_name": ch.name,
+                "challenge_task_type": ch.task_type,
+                "model_name": model_name,
+                "count": g["count"],
+                "errors": g["errors"],
+                "avg_score": avg,
+                "started_at": g["first_ts"].isoformat() if g["first_ts"] else None,
+                "finished_at": g["last_ts"].isoformat() if g["last_ts"] else None,
+            })
+
+    # Sort by finish time desc (latest first)
+    runs.sort(key=lambda r: r["finished_at"] or "", reverse=True)
+    result = {"total": len(runs), "runs": runs}
+
+    # Cache for 60 seconds
+    _test_runs_cache["data"] = result
+    _test_runs_cache["expires_at"] = time.monotonic() + 60
+    return result
 
 
 @router.get("/benchmarks", response_model=List[BenchmarkListItem])

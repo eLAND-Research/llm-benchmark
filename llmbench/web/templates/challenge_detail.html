@@ -276,6 +276,10 @@
                     class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 -mb-px">
                     生成題目 <span id="resultsCount" class="ml-1 text-xs text-gray-400"></span>
                 </button>
+                <button id="tab-leaderboard" onclick="switchTab('leaderboard')"
+                    class="px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 -mb-px">
+                    排行榜 <span id="leaderboardCount" class="ml-1 text-xs text-gray-400"></span>
+                </button>
             </div>
         </div>
 
@@ -346,7 +350,6 @@
                 </div>
             </div>
             <div id="resultsSummary" class="hidden mb-3 text-sm text-green-700 bg-green-50 rounded p-3"></div>
-            <div id="leaderboardSummary" class="hidden mb-3"></div>
             <div id="resultsTable" class="overflow-x-auto"></div>
             <p id="resultsEmpty" class="hidden text-sm text-gray-500 text-center py-8">尚未生成題目。</p>
 
@@ -356,6 +359,12 @@
                 <div id="humanSummary" class="mb-3 text-sm text-gray-600"></div>
                 <div id="humanTable" class="overflow-x-auto"></div>
             </div>
+        </div>
+
+        <!-- Tab: 排行榜 -->
+        <div id="pane-leaderboard" class="hidden">
+            <div id="leaderboardSummary" class="mb-3"></div>
+            <p id="leaderboardEmpty" class="hidden text-sm text-gray-500 text-center py-8">尚未產生排行榜資料。</p>
         </div>
     </div>
 </div>
@@ -536,15 +545,15 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function switchTab(tab) {
-    const isPreview = tab === 'preview';
-    document.getElementById('pane-preview').classList.toggle('hidden', !isPreview);
-    document.getElementById('pane-results').classList.toggle('hidden', isPreview);
-    document.getElementById('tab-preview').className = isPreview
-        ? 'px-4 py-2 text-sm font-medium border-b-2 border-indigo-500 text-indigo-600 -mb-px'
-        : 'px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 -mb-px';
-    document.getElementById('tab-results').className = isPreview
-        ? 'px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 -mb-px'
-        : 'px-4 py-2 text-sm font-medium border-b-2 border-indigo-500 text-indigo-600 -mb-px';
+    const tabs = ['preview', 'results', 'leaderboard'];
+    const activeCls = 'px-4 py-2 text-sm font-medium border-b-2 border-indigo-500 text-indigo-600 -mb-px';
+    const inactiveCls = 'px-4 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 -mb-px';
+    tabs.forEach(t => {
+        const pane = document.getElementById(`pane-${t}`);
+        const btn = document.getElementById(`tab-${t}`);
+        if (pane) pane.classList.toggle('hidden', t !== tab);
+        if (btn) btn.className = (t === tab) ? activeCls : inactiveCls;
+    });
 }
 
 async function loadResults() {
@@ -585,6 +594,9 @@ async function loadResults() {
         baseLeaderboardRows = data.leaderboard || [];
         renderLeaderboard(baseLeaderboardRows, judgeModel, data.aspect_labels || DEFAULT_ASPECTS);
         leaderboardEl.classList.remove('hidden');
+        const lbCountEl = document.getElementById('leaderboardCount');
+        if (lbCountEl) lbCountEl.textContent = baseLeaderboardRows.length ? `${baseLeaderboardRows.length} 個` : '';
+        document.getElementById('leaderboardEmpty')?.classList.toggle('hidden', baseLeaderboardRows.length > 0);
         renderResultsTable(data.items);
     } else {
         summaryEl.classList.add('hidden');
