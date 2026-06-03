@@ -736,60 +736,62 @@ async def list_test_runs(db: AsyncSession = Depends(get_db)):
     result = await db.execute(query)
     challenges = list(result.scalars().all())
 
-    runs: list[dict] = []
-    for ch_idx, ch in enumerate(challenges):
-        # Yield to event loop between challenges so other requests can be served
-        # while we churn through hundreds of MB of results_jsonl.
-        if ch_idx % 3 == 0:
-            await asyncio.sleep(0)
-        if not ch.results_jsonl:
-            continue
-        # Group rows by (model_name, hour_bucket)
-        groups: dict[tuple, dict] = defaultdict(
-            lambda: {"count": 0, "scores": [], "first_ts": None, "last_ts": None, "errors": 0}
-        )
-        for line in ch.results_jsonl.splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                row = json.loads(line)
-            except Exception:
-                continue
-            model_name = row.get("model_name") or row.get("model") or "unknown"
-            ts_raw = row.get("finished_at") or row.get("requested_at") or ""
-            try:
-                ts = datetime.fromisoformat(ts_raw.replace("Z", "+00:00")) if ts_raw else None
-            except Exception:
-                ts = None
-            # Hour bucket → group rows generated within the same hour
-            bucket = ts.strftime("%Y-%m-%d %H") if ts else "unknown"
-            key = (model_name, bucket)
-            g = groups[key]
-            g["count"] += 1
-            if isinstance(row.get("score"), (int, float)):
-                g["scores"].append(float(row["score"]))
-            if row.get("response_error"):
-                g["errors"] += 1
-            if ts:
-                if g["first_ts"] is None or ts < g["first_ts"]:
-                    g["first_ts"] = ts
-                if g["last_ts"] is None or ts > g["last_ts"]:
-                    g["last_ts"] = ts
+    # Snapshot the small data we need from each ORM object first
+    # (uuid/name/task_type/results_jsonl), then do all the heavy parsing in
+    # a worker thread so the asyncio event loop stays free for other requests.
+    snapshots = [(ch.uuid, ch.name, ch.task_type, ch.results_jsonl or "") for ch in challenges]
 
-        for (model_name, bucket), g in groups.items():
-            avg = round(sum(g["scores"]) / len(g["scores"]), 3) if g["scores"] else None
-            runs.append({
-                "challenge_uuid": ch.uuid,
-                "challenge_name": ch.name,
-                "challenge_task_type": ch.task_type,
-                "model_name": model_name,
-                "count": g["count"],
-                "errors": g["errors"],
-                "avg_score": avg,
-                "started_at": g["first_ts"].isoformat() if g["first_ts"] else None,
-                "finished_at": g["last_ts"].isoformat() if g["last_ts"] else None,
-            })
+    def _parse_all() -> list[dict]:
+        out: list[dict] = []
+        for ch_uuid, ch_name, ch_task, results_jsonl in snapshots:
+            if not results_jsonl:
+                continue
+            groups: dict[tuple, dict] = defaultdict(
+                lambda: {"count": 0, "scores": [], "first_ts": None, "last_ts": None, "errors": 0}
+            )
+            for line in results_jsonl.splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    row = json.loads(line)
+                except Exception:
+                    continue
+                model_name = row.get("model_name") or row.get("model") or "unknown"
+                ts_raw = row.get("finished_at") or row.get("requested_at") or ""
+                try:
+                    ts = datetime.fromisoformat(ts_raw.replace("Z", "+00:00")) if ts_raw else None
+                except Exception:
+                    ts = None
+                bucket = ts.strftime("%Y-%m-%d %H") if ts else "unknown"
+                key = (model_name, bucket)
+                g = groups[key]
+                g["count"] += 1
+                if isinstance(row.get("score"), (int, float)):
+                    g["scores"].append(float(row["score"]))
+                if row.get("response_error"):
+                    g["errors"] += 1
+                if ts:
+                    if g["first_ts"] is None or ts < g["first_ts"]:
+                        g["first_ts"] = ts
+                    if g["last_ts"] is None or ts > g["last_ts"]:
+                        g["last_ts"] = ts
+            for (model_name, bucket), g in groups.items():
+                avg = round(sum(g["scores"]) / len(g["scores"]), 3) if g["scores"] else None
+                out.append({
+                    "challenge_uuid": ch_uuid,
+                    "challenge_name": ch_name,
+                    "challenge_task_type": ch_task,
+                    "model_name": model_name,
+                    "count": g["count"],
+                    "errors": g["errors"],
+                    "avg_score": avg,
+                    "started_at": g["first_ts"].isoformat() if g["first_ts"] else None,
+                    "finished_at": g["last_ts"].isoformat() if g["last_ts"] else None,
+                })
+        return out
+
+    runs = await asyncio.to_thread(_parse_all)
 
     # Sort by finish time desc (latest first)
     runs.sort(key=lambda r: r["finished_at"] or "", reverse=True)
