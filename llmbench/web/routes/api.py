@@ -737,7 +737,11 @@ async def list_test_runs(db: AsyncSession = Depends(get_db)):
     challenges = list(result.scalars().all())
 
     runs: list[dict] = []
-    for ch in challenges:
+    for ch_idx, ch in enumerate(challenges):
+        # Yield to event loop between challenges so other requests can be served
+        # while we churn through hundreds of MB of results_jsonl.
+        if ch_idx % 3 == 0:
+            await asyncio.sleep(0)
         if not ch.results_jsonl:
             continue
         # Group rows by (model_name, hour_bucket)
