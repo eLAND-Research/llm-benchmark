@@ -804,6 +804,89 @@ async def list_test_runs(db: AsyncSession = Depends(get_db)):
     return result
 
 
+async def _warm_test_runs_safe() -> None:
+    """Background refresh of /test-runs cache.
+
+    Key property: never invalidates the cache before computing. Users always
+    see a valid cached response, even while this is running. Once the new
+    result is computed, atomically swap it in.
+    """
+    from sqlalchemy import select
+    from sqlalchemy.orm import defer
+    from collections import defaultdict
+    from datetime import datetime
+
+    async with AsyncSessionLocal() as db:
+        query = (
+            select(Challenge)
+            .options(
+                defer(Challenge.data_jsonl),
+                defer(Challenge.participant_scores_jsonl),
+            )
+            .order_by(Challenge.updated_at.desc())
+        )
+        result = await db.execute(query)
+        challenges = list(result.scalars().all())
+        snapshots = [(ch.uuid, ch.name, ch.task_type, ch.results_jsonl or "") for ch in challenges]
+
+    def _parse_all() -> list[dict]:
+        out: list[dict] = []
+        for ch_uuid, ch_name, ch_task, results_jsonl in snapshots:
+            if not results_jsonl:
+                continue
+            groups: dict[tuple, dict] = defaultdict(
+                lambda: {"count": 0, "scores": [], "first_ts": None, "last_ts": None, "errors": 0}
+            )
+            for line in results_jsonl.splitlines():
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    row = json.loads(line)
+                except Exception:
+                    continue
+                model_name = row.get("model_name") or row.get("model") or "unknown"
+                ts_raw = row.get("finished_at") or row.get("requested_at") or ""
+                try:
+                    ts = datetime.fromisoformat(ts_raw.replace("Z", "+00:00")) if ts_raw else None
+                except Exception:
+                    ts = None
+                bucket = ts.strftime("%Y-%m-%d %H") if ts else "unknown"
+                key = (model_name, bucket)
+                g = groups[key]
+                g["count"] += 1
+                if isinstance(row.get("score"), (int, float)):
+                    g["scores"].append(float(row["score"]))
+                if row.get("response_error"):
+                    g["errors"] += 1
+                if ts:
+                    if g["first_ts"] is None or ts < g["first_ts"]:
+                        g["first_ts"] = ts
+                    if g["last_ts"] is None or ts > g["last_ts"]:
+                        g["last_ts"] = ts
+            for (model_name, bucket), g in groups.items():
+                avg = round(sum(g["scores"]) / len(g["scores"]), 3) if g["scores"] else None
+                out.append({
+                    "challenge_uuid": ch_uuid,
+                    "challenge_name": ch_name,
+                    "challenge_task_type": ch_task,
+                    "model_name": model_name,
+                    "count": g["count"],
+                    "errors": g["errors"],
+                    "avg_score": avg,
+                    "started_at": g["first_ts"].isoformat() if g["first_ts"] else None,
+                    "finished_at": g["last_ts"].isoformat() if g["last_ts"] else None,
+                })
+        out.sort(key=lambda r: r["finished_at"] or "", reverse=True)
+        return out
+
+    runs = await asyncio.to_thread(_parse_all)
+    fresh = {"total": len(runs), "runs": runs}
+    # Atomic swap — user-facing reads always see a valid snapshot
+    _test_runs_cache["data"] = fresh
+    _test_runs_cache["expires_at"] = time.monotonic() + 300
+
+
 @router.get("/benchmarks", response_model=List[BenchmarkListItem])
 async def list_benchmarks(
     status: Optional[str] = Query(None, description="Filter by status"),
