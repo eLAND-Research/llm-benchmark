@@ -59,26 +59,11 @@ async def startup_event():
     await init_db()
     print("✅ Database initialized")
 
-    # Background warming for /api/test-runs:
-    # - Computes new value WITHOUT invalidating cache (user always reads cached)
-    # - Atomically swaps in fresh result when ready
-    # - Runs every 4 min (within 5 min TTL) so cache never expires under load
-    import asyncio
-    from .database import AsyncSessionLocal
-    from .routes.api import _warm_test_runs_safe
-
-    async def _warm_loop():
-        await asyncio.sleep(30)  # let server settle + serve any initial requests
-        while True:
-            try:
-                t = time.perf_counter()
-                await _warm_test_runs_safe()
-                print(f"✅ /api/test-runs refreshed in {(time.perf_counter()-t)*1000:.0f}ms")
-            except Exception as e:
-                print(f"⚠️  warming failed: {e}")
-            await asyncio.sleep(240)  # 4 min, before 5 min TTL expires
-
-    asyncio.create_task(_warm_loop())
+    # Note: background warming was disabled because even with atomic cache swap,
+    # the heavy SQLite read for warming evicted /challenges' page cache and
+    # caused subsequent UI requests to take 16+ seconds. Without warming,
+    # the cache is built lazily on first hit (~6s) and stays in-memory for
+    # 30 minutes after that, fast on normal use.
 
 
 @app.on_event("shutdown")
