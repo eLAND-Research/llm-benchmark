@@ -9,6 +9,7 @@ import json
 import asyncio
 import re
 import random
+import time
 from urllib.parse import quote
 
 logger = logging.getLogger(__name__)
@@ -2384,6 +2385,11 @@ async def test_new_model(
     return {"status": "running", "message": f"開始用 {model_name} 測試現有題目"}
 
 
+# Per-challenge results cache (60s TTL). Keyed by (uuid, results_jsonl hash).
+# Hash of jsonl invalidates cache automatically when challenge data changes.
+_results_cache: dict[str, dict] = {}
+
+
 @router.get("/challenges/{uuid}/results")
 async def get_challenge_results(uuid: str, db: AsyncSession = Depends(get_db)):
     """Get saved generated results for a challenge."""
@@ -2391,6 +2397,14 @@ async def get_challenge_results(uuid: str, db: AsyncSession = Depends(get_db)):
     if not challenge:
         raise HTTPException(status_code=404, detail="Challenge not found")
     default_labels = _DEFAULT_ASPECT_LABELS
+
+    # Cache key includes a content fingerprint so re-runs invalidate automatically
+    cache_key = uuid
+    rj = challenge.results_jsonl or ""
+    fingerprint = (len(rj), hash(rj[:1000]) if rj else 0)
+    cached = _results_cache.get(cache_key)
+    if cached and cached.get("fingerprint") == fingerprint and cached.get("expires_at", 0) > time.monotonic():
+        return cached["data"]
 
     if not challenge.results_jsonl:
         return {
@@ -2546,8 +2560,29 @@ async def get_challenge_results(uuid: str, db: AsyncSession = Depends(get_db)):
             run_dedup_count = v
             break
 
-    return {
-        "items": items,
+    # Trim heavy fields from each item to reduce response size dramatically.
+    # UI shows truncated content; full row available via /results/{index}.
+    def _light(it: dict) -> dict:
+        out = dict(it)
+        # Drop fields used only in detail expand (lazy-loadable)
+        out.pop("request_messages", None)
+        out.pop("full_content", None)
+        # Truncate long text fields
+        c = out.get("content") or ""
+        if len(c) > 300:
+            out["content"] = c[:300] + "…"
+        rt = out.get("response_text") or ""
+        if len(rt) > 500:
+            out["response_text"] = rt[:500] + "…"
+        rsn = out.get("reasoning") or ""
+        if len(rsn) > 300:
+            out["reasoning"] = rsn[:300] + "…"
+        return out
+
+    items_light = [_light(it) for it in items]
+
+    result = {
+        "items": items_light,
         "total_items": len(items),
         "source_items": source_items,
         "filtered_items": filtered_count,
@@ -2566,6 +2601,14 @@ async def get_challenge_results(uuid: str, db: AsyncSession = Depends(get_db)):
         "per_model": per_model,
         "leaderboard": leaderboard,
     }
+
+    # Cache 60s with fingerprint so re-generates invalidate automatically
+    _results_cache[cache_key] = {
+        "data": result,
+        "fingerprint": fingerprint,
+        "expires_at": time.monotonic() + 60,
+    }
+    return result
 
 
 @router.get("/challenges/{uuid}/question-list")
