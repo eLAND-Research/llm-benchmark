@@ -798,9 +798,9 @@ async def list_test_runs(db: AsyncSession = Depends(get_db)):
     runs.sort(key=lambda r: r["finished_at"] or "", reverse=True)
     result = {"total": len(runs), "runs": runs}
 
-    # Cache for 60 seconds
+    # Cache for 5 minutes (avoids re-aggregating large results_jsonl during normal browsing)
     _test_runs_cache["data"] = result
-    _test_runs_cache["expires_at"] = time.monotonic() + 60
+    _test_runs_cache["expires_at"] = time.monotonic() + 300
     return result
 
 
@@ -2602,11 +2602,11 @@ async def get_challenge_results(uuid: str, db: AsyncSession = Depends(get_db)):
         "leaderboard": leaderboard,
     }
 
-    # Cache 60s with fingerprint so re-generates invalidate automatically
+    # Cache 5 min with fingerprint so re-generates invalidate automatically
     _results_cache[cache_key] = {
         "data": result,
         "fingerprint": fingerprint,
-        "expires_at": time.monotonic() + 60,
+        "expires_at": time.monotonic() + 300,
     }
     return result
 

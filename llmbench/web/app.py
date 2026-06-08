@@ -59,32 +59,10 @@ async def startup_event():
     await init_db()
     print("✅ Database initialized")
 
-    # Pre-warm /api/test-runs cache so first user request is instant.
-    # Run the heavy aggregation in a background task, after a short delay,
-    # so it doesn't block initial user requests.
-    import asyncio
-    from .database import AsyncSessionLocal
-    from .routes.api import list_test_runs, _test_runs_cache
-
-    async def _warm_once():
-        try:
-            _test_runs_cache["expires_at"] = 0
-            async with AsyncSessionLocal() as db:
-                t = time.perf_counter()
-                await list_test_runs(db)
-                elapsed = (time.perf_counter() - t) * 1000
-                print(f"✅ /api/test-runs cache warmed in {elapsed:.0f}ms")
-        except Exception as e:
-            print(f"⚠️  Failed to warm test-runs cache: {e}")
-
-    async def _warm_loop():
-        await asyncio.sleep(10)  # let server finish booting + serve any initial requests
-        await _warm_once()
-        while True:
-            await asyncio.sleep(120)  # refresh every 2 min (within 60s TTL is fine on first hit)
-            await _warm_once()
-
-    asyncio.create_task(_warm_loop())
+    # Note: auto-warming was disabled because it caused contention with /challenges UI
+    # (defer'd Challenge query still got blocked when warming held DB connection +
+    # parsed huge JSONL). Now we let the first /test-runs request warm the cache
+    # lazily, then 60s TTL keeps it warm during active browsing.
 
 
 @app.on_event("shutdown")
